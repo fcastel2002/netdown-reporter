@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Product>NetDown Reporter</Product>
+    <AssemblyTitle>NetDown Reporter</AssemblyTitle>
+
+    <!-- Corre todo el día en segundo plano: sin hilo de GC en background ni ICU para bajar memoria. -->
+    <ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="report.html" LogicalName="report.html" />
+    <InternalsVisibleTo Include="NetDownReporter.Tests" />
+  </ItemGroup>
+
+</Project>

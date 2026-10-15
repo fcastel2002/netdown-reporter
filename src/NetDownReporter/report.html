@@ -1,0 +1,522 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cortes de internet</title>
+<style>
+  :root {
+    color-scheme: light;
+    --page: #f9f9f7;
+    --surface: #fcfcfb;
+    --ink: #0b0b0b;
+    --ink-2: #52514e;
+    --muted: #898781;
+    --grid: #e1e0d9;
+    --axis: #c3c2b7;
+    --covered: #e9e8e2;
+    --zero: #ecebe6;
+    --ring: rgba(11, 11, 11, 0.10);
+    --c-wifi: #2a78d6;
+    --c-router: #eb6834;
+    --c-isp: #1baf7a;
+    --seq-1: #b7d3f6; --seq-2: #86b6ef; --seq-3: #3987e5; --seq-4: #256abf; --seq-5: #104281;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --page: #0d0d0d;
+      --surface: #1a1a19;
+      --ink: #ffffff;
+      --ink-2: #c3c2b7;
+      --grid: #2c2c2a;
+      --axis: #383835;
+      --covered: #2a2a28;
+      --zero: #302f2c;
+      --ring: rgba(255, 255, 255, 0.10);
+      --c-wifi: #3987e5;
+      --c-router: #d95926;
+      --c-isp: #199e70;
+      --seq-1: #184f95; --seq-2: #1c5cab; --seq-3: #2a78d6; --seq-4: #5598e7; --seq-5: #9ec5f4;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--page);
+    color: var(--ink);
+    font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  main { max-width: 1100px; margin: 0 auto; padding: 24px 16px 48px; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  h2 { font-size: 15px; margin: 0 0 2px; }
+  .sub { color: var(--ink-2); margin: 0 0 12px; }
+  .filters { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; margin: 16px 0; }
+  .filters label { color: var(--ink-2); display: flex; gap: 6px; align-items: center; }
+  select, button {
+    font: inherit; color: var(--ink); background: var(--surface);
+    border: 1px solid var(--axis); border-radius: 6px; padding: 4px 8px;
+  }
+  button { cursor: pointer; margin-left: auto; }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 16px; }
+  .tile, .card { background: var(--surface); border: 1px solid var(--ring); border-radius: 10px; padding: 14px 16px; }
+  .tile .label { color: var(--ink-2); font-size: 13px; }
+  .tile .value { font-size: 26px; font-weight: 600; margin-top: 2px; }
+  .card { margin-bottom: 16px; }
+  .legend { display: flex; flex-wrap: wrap; gap: 4px 16px; color: var(--ink-2); font-size: 13px; margin: 8px 0; }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .swatch { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+  .swatch.empty { border: 1px solid var(--axis); }
+  svg { display: block; width: 100%; height: auto; overflow: visible; }
+  svg text { fill: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+  .hit { cursor: default; }
+  .hit:hover, .hit:focus { opacity: 0.75; outline: none; }
+  .scroll { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--grid); vertical-align: top; }
+  th { color: var(--ink-2); font-weight: 600; }
+  td.num { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  td.detail { color: var(--ink-2); font-size: 12px; }
+  .cause { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+  .empty-state { color: var(--ink-2); padding: 24px 0; text-align: center; }
+  #tip {
+    position: fixed; pointer-events: none; z-index: 10; display: none;
+    background: var(--surface); border: 1px solid var(--ring); border-radius: 8px;
+    padding: 8px 10px; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15); font-size: 13px; max-width: 280px;
+  }
+  #tip strong { display: block; font-size: 15px; }
+  #tip .tl { color: var(--ink-2); white-space: nowrap; }
+  @media print {
+    body { background: #fff; }
+    .filters button, #tip { display: none; }
+    .card, .tile { break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <h1>Cortes de internet</h1>
+  <p class="sub" id="subtitle"></p>
+
+  <div class="filters">
+    <label>Período
+      <select id="range">
+        <option value="7">Últimos 7 días</option>
+        <option value="30" selected>Últimos 30 días</option>
+        <option value="90">Últimos 90 días</option>
+        <option value="0">Todo</option>
+      </select>
+    </label>
+    <label>Causa
+      <select id="cause">
+        <option value="">Todas</option>
+        <option value="Wifi">Sin WiFi (PC)</option>
+        <option value="Router">Router</option>
+        <option value="Isp">ISP</option>
+      </select>
+    </label>
+    <button type="button" onclick="window.print()">Imprimir / PDF</button>
+  </div>
+
+  <div class="tiles" id="tiles"></div>
+
+  <section class="card">
+    <h2>Cortes por causa</h2>
+    <p class="sub">Sin WiFi: la PC perdió el WiFi (Windows o el access point). Router: hay WiFi pero el router no responde. ISP: el router responde pero no hay internet.</p>
+    <div class="scroll"><table id="causes"></table></div>
+  </section>
+
+  <section class="card">
+    <h2>¿A qué hora empiezan los cortes?</h2>
+    <p class="sub">Cantidad de cortes según la hora en que empezaron. Debajo, cuántas horas estuvo prendido el monitor en cada franja: sin monitoreo no hay datos.</p>
+    <div class="legend" id="hour-legend"></div>
+    <svg id="hours" role="img" aria-label="Cortes por hora del día"></svg>
+    <svg id="coverage" role="img" aria-label="Horas monitoreadas por hora del día"></svg>
+  </section>
+
+  <section class="card">
+    <h2>Día de la semana × hora</h2>
+    <p class="sub">Cortes que empezaron en cada franja. Si se repiten a la misma hora, se destaca una columna.</p>
+    <div class="legend" id="heat-legend"></div>
+    <svg id="heat" role="img" aria-label="Cortes por día de la semana y hora"></svg>
+  </section>
+
+  <section class="card">
+    <h2>Línea de tiempo por día</h2>
+    <p class="sub">Cada fila es un día. Gris: monitor prendido. Color: corte. Cortes alineados verticalmente = misma hora todos los días.</p>
+    <div class="legend" id="timeline-legend"></div>
+    <svg id="timeline" role="img" aria-label="Línea de tiempo de cortes por día"></svg>
+  </section>
+
+  <section class="card">
+    <h2>Detalle de cortes</h2>
+    <div class="scroll"><table id="list"></table></div>
+  </section>
+</main>
+<div id="tip" role="tooltip"></div>
+
+<script>
+const DATA = /*__DATA__*/null;
+
+const CAUSES = [
+  { key: 'Wifi', label: 'Sin WiFi', color: 'var(--c-wifi)' },
+  { key: 'Router', label: 'Router', color: 'var(--c-router)' },
+  { key: 'Isp', label: 'ISP', color: 'var(--c-isp)' },
+];
+const causeOf = k => CAUSES.find(c => c.key === k);
+const DAYS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
+const HOUR = 3600e3, DAY = 24 * HOUR;
+const SVGNS = 'http://www.w3.org/2000/svg';
+
+const now = new Date(DATA.generated);
+const outagesAll = DATA.outages.map(o => ({ ...o, start: new Date(o.start), end: new Date(o.end) }));
+const sessionsAll = DATA.sessions.map(s => ({ start: new Date(s.start), end: new Date(s.end) }));
+
+const pad = n => String(n).padStart(2, '0');
+const fmtDate = d => `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
+const fmtTime = d => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+const fmtDateTime = d => `${fmtDate(d)} ${fmtTime(d)}:${pad(d.getSeconds())}`;
+const weekday = d => (d.getDay() + 6) % 7;
+const startOfDay = d => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+function fmtDur(ms) {
+  const s = Math.max(0, Math.round(ms / 1000));
+  if (s >= 3600) return `${Math.floor(s / 3600)} h ${pad(Math.floor(s % 3600 / 60))} min`;
+  if (s >= 60) return `${Math.floor(s / 60)} min ${pad(s % 60)} s`;
+  return `${s} s`;
+}
+const fmtHours = ms => `${(ms / HOUR).toLocaleString('es-AR', { maximumFractionDigits: 1 })} h`;
+
+function el(tag, attrs = {}, parent) {
+  const n = document.createElementNS(SVGNS, tag);
+  for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, v);
+  if (parent) parent.appendChild(n);
+  return n;
+}
+function h(tag, text, parent, cls) {
+  const n = document.createElement(tag);
+  if (text != null) n.textContent = text;
+  if (cls) n.className = cls;
+  if (parent) parent.appendChild(n);
+  return n;
+}
+function clear(n) { while (n.firstChild) n.removeChild(n.firstChild); }
+
+// Tooltip compartido: el valor primero, la etiqueta después. Todo por textContent.
+const tip = document.getElementById('tip');
+function attachTip(node, value, label) {
+  node.classList.add('hit');
+  node.setAttribute('tabindex', '0');
+  const show = ev => {
+    clear(tip);
+    h('strong', value, tip);
+    for (const line of [].concat(label)) h('div', line, tip, 'tl');
+    tip.style.display = 'block';
+    // Medir en el origen: pegado al borde el navegador lo angosta y la medida sale mal.
+    tip.style.left = '0px';
+    const r =ev.clientX != null ? { x: ev.clientX, y: ev.clientY } : (() => {
+      const b = node.getBoundingClientRect(); return { x: b.left + b.width / 2, y: b.top };
+    })();
+    const w = tip.offsetWidth, ht = tip.offsetHeight;
+    tip.style.left = Math.min(window.innerWidth - w - 8, r.x + 12) + 'px';
+    tip.style.top = Math.max(8, r.y - ht - 12) + 'px';
+  };
+  node.addEventListener('pointermove', show);
+  node.addEventListener('focus', show);
+  node.addEventListener('pointerleave', () => tip.style.display = 'none');
+  node.addEventListener('blur', () => tip.style.display = 'none');
+}
+
+function legend(id, items) {
+  const box = document.getElementById(id);
+  clear(box);
+  for (const it of items) {
+    const s = h('span', null, box);
+    const sw = h('i', null, s, 'swatch' + (it.empty ? ' empty' : ''));
+    if (!it.empty) sw.style.background = it.color;
+    s.appendChild(document.createTextNode(it.label));
+  }
+}
+
+// Divide [start, end) en tramos dentro de cada hora del reloj.
+function eachHourSlice(start, end, fn) {
+  let t = start.getTime();
+  const e = end.getTime();
+  while (t < e) {
+    const d = new Date(t);
+    const next = Math.min(e, new Date(d.getFullYear(), d.getMonth(), d.getDate(), d.getHours() + 1).getTime());
+    fn(d, next - t);
+    t = next;
+  }
+}
+
+function clip(items, from) {
+  return items
+    .filter(x => x.end > from)
+    .map(x => ({ ...x, start: x.start < from ? from : x.start }));
+}
+
+function render() {
+  const days = +document.getElementById('range').value;
+  const causeFilter = document.getElementById('cause').value;
+  const firstData = Math.min(
+    ...sessionsAll.map(s => s.start.getTime()),
+    ...outagesAll.map(o => o.start.getTime()),
+    now.getTime());
+  const from = days ? startOfDay(new Date(now - (days - 1) * DAY)) : new Date(firstData);
+
+  const sessions = clip(sessionsAll, from);
+  const inRange = outagesAll.filter(o => o.start >= from);
+  const outages = inRange.filter(o => !causeFilter || o.cause === causeFilter);
+
+  // Cobertura del monitor por hora del día y por día de la semana × hora.
+  const covHour = Array(24).fill(0);
+  const covCell = DAYS.map(() => Array(24).fill(0));
+  for (const s of sessions) eachHourSlice(s.start, s.end, (d, ms) => {
+    covHour[d.getHours()] += ms;
+    covCell[weekday(d)][d.getHours()] += ms;
+  });
+  const monitored = covHour.reduce((a, b) => a + b, 0);
+  const downAll = inRange.reduce((a, o) => a + (o.end - o.start), 0);
+
+  document.getElementById('subtitle').textContent =
+    `Generado el ${fmtDateTime(now)} · ${from <= new Date(firstData) ? 'desde el inicio del registro' : 'desde el ' + fmtDate(from)}`;
+
+  // Tiles
+  const tiles = document.getElementById('tiles');
+  clear(tiles);
+  const durations = outages.map(o => o.end - o.start).sort((a, b) => a - b);
+  const median = durations.length ? durations[Math.floor((durations.length - 1) / 2)] : 0;
+  const down = durations.reduce((a, b) => a + b, 0);
+  const tile = (label, value) => {
+    const t = h('div', null, tiles, 'tile');
+    h('div', label, t, 'label');
+    h('div', value, t, 'value');
+  };
+  tile('Cortes', String(outages.length));
+  tile('Tiempo sin internet', fmtDur(down));
+  tile('Duración típica (mediana)', outages.length ? fmtDur(median) : '—');
+  tile('Disponibilidad', monitored
+    ? `${(100 * (1 - downAll / monitored)).toLocaleString('es-AR', { maximumFractionDigits: 2 })} %`
+    : '—');
+  tile('Tiempo monitoreado', fmtHours(monitored));
+
+  renderCauses(inRange);
+  const shown = causeFilter ? CAUSES.filter(c => c.key === causeFilter) : CAUSES;
+  legend('hour-legend', shown.map(c => ({ label: c.label, color: c.color })));
+  renderHours(outages, shown, covHour);
+  renderHeat(outages, covCell);
+  legend('timeline-legend', [{ label: 'Monitor prendido', color: 'var(--covered)' }, ...shown.map(c => ({ label: c.label, color: c.color }))]);
+  renderTimeline(outages, sessions, from);
+  renderList(outages);
+}
+
+function renderCauses(outages) {
+  const t = document.getElementById('causes');
+  clear(t);
+  const head = h('tr', null, h('thead', null, t));
+  for (const c of ['Causa', 'Cortes', 'Tiempo total', 'Corte más largo']) h('th', c, head);
+  const body = h('tbody', null, t);
+  for (const c of CAUSES) {
+    const list = outages.filter(o => o.cause === c.key);
+    const tr = h('tr', null, body);
+    const td = h('td', null, tr);
+    const lab = h('span', null, td, 'cause');
+    h('i', null, lab, 'swatch').style.background = c.color;
+    lab.appendChild(document.createTextNode(c.label));
+    h('td', String(list.length), tr, 'num');
+    h('td', fmtDur(list.reduce((a, o) => a + (o.end - o.start), 0)), tr, 'num');
+    h('td', list.length ? fmtDur(Math.max(...list.map(o => o.end - o.start))) : '—', tr, 'num');
+  }
+}
+
+// Columnas apiladas: 24 horas, una pila por causa, 2px de separación, punta redondeada.
+function renderHours(outages, shown, covHour) {
+  const svg = document.getElementById('hours');
+  clear(svg);
+  const W = 960, H = 220, L = 32, B = 22, T = 8, band = (W - L) / 24, bw = Math.min(24, band - 8);
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  const counts = Array.from({ length: 24 }, () => Object.fromEntries(CAUSES.map(c => [c.key, { n: 0, ms: 0 }])));
+  for (const o of outages) {
+    const cell = counts[o.start.getHours()][o.cause];
+    cell.n++; cell.ms += o.end - o.start;
+  }
+  const totals = counts.map(c => shown.reduce((a, s) => a + c[s.key].n, 0));
+  const max = Math.max(1, ...totals);
+  const step = max <= 5 ? 1 : max <= 10 ? 2 : Math.ceil(max / 5);
+  const top = Math.ceil(max / step) * step;
+  const y = v => T + (H - B - T) * (1 - v / top);
+  for (let v = 0; v <= top; v += step) {
+    el('line', { x1: L, x2: W, y1: y(v), y2: y(v), stroke: v ? 'var(--grid)' : 'var(--axis)', 'stroke-width': 1 }, svg);
+    el('text', { x: L - 6, y: y(v) + 4, 'text-anchor': 'end' }, svg).textContent = v;
+  }
+  for (let hr = 0; hr < 24; hr++) {
+    const x = L + hr * band + (band - bw) / 2;
+    if (hr % 2 === 0) el('text', { x: x + bw / 2, y: H - 6, 'text-anchor': 'middle' }, svg).textContent = `${pad(hr)}h`;
+    let base = 0;
+    const segs = shown.filter(c => counts[hr][c.key].n);
+    segs.forEach((c, i) => {
+      const n = counts[hr][c.key].n;
+      const y0 = y(base), y1 = y(base + n);
+      const gap = i > 0 ? 2 : 0;
+      const hgt = Math.max(1, y0 - y1 - gap);
+      const yTop = y0 - gap - hgt;
+      const isTop = i === segs.length - 1;
+      const r = isTop ? Math.min(4, hgt, bw / 2) : 0;
+      const d = `M${x},${y0 - gap} V${yTop + r} Q${x},${yTop} ${x + r},${yTop} H${x + bw - r} Q${x + bw},${yTop} ${x + bw},${yTop + r} V${y0 - gap} Z`;
+      const p = el('path', { d, fill: c.color }, svg);
+      attachTip(p, `${n} ${n === 1 ? 'corte' : 'cortes'}`,
+        [`${c.label} · ${pad(hr)}:00–${pad(hr)}:59`, `Total: ${fmtDur(counts[hr][c.key].ms)}`,
+         `Monitoreado en esa franja: ${fmtHours(covHour[hr])}`]);
+      base += n;
+    });
+    if (!segs.length) {
+      const hit = el('rect', { x: L + hr * band, y: T, width: band, height: H - B - T, fill: 'transparent' }, svg);
+      attachTip(hit, '0 cortes', [`${pad(hr)}:00–${pad(hr)}:59`, `Monitoreado: ${fmtHours(covHour[hr])}`]);
+    }
+  }
+
+  // Cobertura alineada con las columnas de arriba (una sola serie, neutra).
+  const cov = document.getElementById('coverage');
+  clear(cov);
+  const CH = 64, CB = 4, CT = 18;
+  cov.setAttribute('viewBox', `0 0 ${W} ${CH}`);
+  el('text', { x: L, y: 11 }, cov).textContent = 'Horas monitoreadas';
+  const cmax = Math.max(1, ...covHour);
+  el('line', { x1: L, x2: W, y1: CH - CB, y2: CH - CB, stroke: 'var(--axis)', 'stroke-width': 1 }, cov);
+  for (let hr = 0; hr < 24; hr++) {
+    const x = L + hr * band + (band - bw) / 2;
+    const hh = Math.max(covHour[hr] ? 2 : 0, (CH - CB - CT) * covHour[hr] / cmax);
+    const r = Math.min(4, hh, bw / 2);
+    const yTop = CH - CB - hh;
+    if (hh) el('path', {
+      d: `M${x},${CH - CB} V${yTop + r} Q${x},${yTop} ${x + r},${yTop} H${x + bw - r} Q${x + bw},${yTop} ${x + bw},${yTop + r} V${CH - CB} Z`,
+      fill: 'var(--axis)',
+    }, cov);
+    const hit = el('rect', { x: L + hr * band, y: CT, width: band, height: CH - CT, fill: 'transparent' }, cov);
+    attachTip(hit, fmtHours(covHour[hr]), `monitoreadas entre ${pad(hr)}:00 y ${pad(hr)}:59`);
+  }
+}
+
+function renderHeat(outages, covCell) {
+  const svg = document.getElementById('heat');
+  clear(svg);
+  const W = 960, L = 40, T = 4, B = 22, cw = (W - L) / 24, chh = 26, H = T + 7 * chh + B;
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  const cells = DAYS.map(() => Array.from({ length: 24 }, () => ({ n: 0, ms: 0 })));
+  for (const o of outages) {
+    const c = cells[weekday(o.start)][o.start.getHours()];
+    c.n++; c.ms += o.end - o.start;
+  }
+  const max = Math.max(1, ...cells.flat().map(c => c.n));
+  const ramp = ['var(--seq-1)', 'var(--seq-2)', 'var(--seq-3)', 'var(--seq-4)', 'var(--seq-5)'];
+  // Con pocos cortes se usan los pasos más oscuros de la rampa, para que 1 corte se vea.
+  const used = ramp.slice(ramp.length - Math.min(ramp.length, max));
+  const shade = n => used[Math.min(used.length - 1, Math.floor((n - 1) * used.length / max))];
+  legend('heat-legend', [
+    { label: 'Sin monitoreo', empty: true },
+    { label: '0 cortes', color: 'var(--zero)' },
+    ...used.map((c, i) => {
+      const lo = Math.floor(i * max / used.length) + 1, hi = Math.floor((i + 1) * max / used.length);
+      return { label: lo === hi ? `${lo}` : `${lo}–${hi}`, color: c };
+    }),
+  ]);
+  for (let d = 0; d < 7; d++) {
+    el('text', { x: L - 8, y: T + d * chh + chh / 2 + 4, 'text-anchor': 'end' }, svg).textContent = DAYS[d];
+    for (let hr = 0; hr < 24; hr++) {
+      const c = cells[d][hr], cov = covCell[d][hr];
+      const attrs = { x: L + hr * cw + 1, y: T + d * chh + 1, width: cw - 2, height: chh - 2, rx: 3 };
+      if (!cov && !c.n) Object.assign(attrs, { fill: 'transparent', stroke: 'var(--grid)', 'stroke-width': 1 });
+      else attrs.fill = c.n ? shade(c.n) : 'var(--zero)';
+      const r = el('rect', attrs, svg);
+      attachTip(r, `${c.n} ${c.n === 1 ? 'corte' : 'cortes'}`,
+        [`${DAYS[d]} ${pad(hr)}:00–${pad(hr)}:59`,
+         c.n ? `Total: ${fmtDur(c.ms)}` : null,
+         `Monitoreado: ${fmtHours(cov)}`].filter(Boolean));
+    }
+  }
+  for (let hr = 0; hr < 24; hr += 2)
+    el('text', { x: L + hr * cw + cw / 2, y: H - 6, 'text-anchor': 'middle' }, svg).textContent = `${pad(hr)}h`;
+}
+
+function renderTimeline(outages, sessions, from) {
+  const svg = document.getElementById('timeline');
+  clear(svg);
+  const MAX_DAYS = 60;
+  const today = startOfDay(now);
+  let first = startOfDay(from);
+  if ((today - first) / DAY >= MAX_DAYS) first = new Date(today - (MAX_DAYS - 1) * DAY);
+  const dayList = [];
+  for (let d = new Date(today); d >= first; d = new Date(d.getFullYear(), d.getMonth(), d.getDate() - 1)) dayList.push(d);
+
+  const W = 960, L = 84, T = 18, rh = 14, gap = 4, H = T + dayList.length * (rh + gap);
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  const x = ms => L + (W - L) * ms / DAY;
+  for (let hr = 0; hr <= 24; hr += 3) {
+    el('line', { x1: x(hr * HOUR), x2: x(hr * HOUR), y1: T - 4, y2: H, stroke: 'var(--grid)', 'stroke-width': 1 }, svg);
+    el('text', { x: x(hr * HOUR), y: 11, 'text-anchor': hr === 24 ? 'end' : hr === 0 ? 'start' : 'middle' }, svg).textContent = `${pad(hr)}h`;
+  }
+  // Parte un intervalo en tramos por día de calendario.
+  const perDay = (start, end, fn) => {
+    let s = start;
+    while (s < end) {
+      const d0 = startOfDay(s);
+      const d1 = new Date(d0.getFullYear(), d0.getMonth(), d0.getDate() + 1);
+      const e = end < d1 ? end : d1;
+      fn(d0, s - d0, e - d0);
+      s = e;
+    }
+  };
+  const rowOf = new Map(dayList.map((d, i) => [d.getTime(), i]));
+  const rowY = i => T + i * (rh + gap);
+  dayList.forEach((d, i) => {
+    el('text', { x: 0, y: rowY(i) + rh - 3 }, svg).textContent = `${DAYS[weekday(d)]} ${pad(d.getDate())}/${pad(d.getMonth() + 1)}`;
+  });
+  for (const s of sessions) perDay(s.start, s.end, (d0, a, b) => {
+    const i = rowOf.get(d0.getTime());
+    if (i == null) return;
+    el('rect', { x: x(a), y: rowY(i), width: Math.max(1, x(b) - x(a)), height: rh, fill: 'var(--covered)' }, svg);
+  });
+  for (const o of outages) {
+    const c = causeOf(o.cause);
+    perDay(o.start, o.end, (d0, a, b) => {
+      const i = rowOf.get(d0.getTime());
+      if (i == null) return;
+      const w = Math.max(3, x(b) - x(a));
+      const r = el('rect', { x: x(a), y: rowY(i), width: w, height: rh, rx: 2, fill: c.color }, svg);
+      attachTip(r, fmtDur(o.end - o.start),
+        [`${c.label} · ${fmtTime(o.start)} → ${fmtTime(o.end)}`, fmtDate(o.start), o.note].filter(Boolean));
+    });
+  }
+}
+
+function renderList(outages) {
+  const t = document.getElementById('list');
+  clear(t);
+  if (!outages.length) {
+    h('caption', 'No hay cortes registrados en este período.', t, 'empty-state');
+    return;
+  }
+  const head = h('tr', null, h('thead', null, t));
+  for (const c of ['Inicio', 'Fin', 'Duración', 'Causa', 'Causas vistas', 'Nota', 'WiFi al cortarse']) h('th', c, head);
+  const body = h('tbody', null, t);
+  for (const o of [...outages].sort((a, b) => b.start - a.start)) {
+    const tr = h('tr', null, body);
+    h('td', `${DAYS[weekday(o.start)]} ${fmtDateTime(o.start)}`, tr, 'num');
+    h('td', o.ongoing ? 'en curso' : fmtDateTime(o.end), tr, 'num');
+    h('td', fmtDur(o.end - o.start), tr, 'num');
+    const c = causeOf(o.cause);
+    const lab = h('span', null, h('td', null, tr), 'cause');
+    h('i', null, lab, 'swatch').style.background = c.color;
+    lab.appendChild(document.createTextNode(c.label));
+    h('td', o.causes.map(k => causeOf(k).label).join(' → '), tr);
+    h('td', o.note, tr);
+    h('td', o.detail, tr, 'detail');
+  }
+}
+
+document.getElementById('range').addEventListener('change', render);
+document.getElementById('cause').addEventListener('change', render);
+render();
+</script>
+</body>
+</html>

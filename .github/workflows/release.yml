@@ -1,0 +1,46 @@
+# Al subir un tag vX.Y.Z: corre los tests, publica los dos exe y crea el release en GitHub.
+#   git tag v1.0.0 && git push origin v1.0.0
+name: release
+
+on:
+  push:
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - run: dotnet test NetDownReporter.slnx -c Release
+
+      - name: Publicar
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        run: |
+          $version = '${{ github.ref_name }}'.TrimStart('v')
+          $common = '-c', 'Release', '-r', 'win-x64', '-p:PublishSingleFile=true', '-p:DebugType=none', "-p:Version=$version"
+          # Portable: trae el runtime de .NET adentro, no hace falta instalar nada. Sin
+          # EnableCompressionInSingleFile: comprimido pesa la mitad pero usa ~50 MB de RAM en vez de ~13;
+          # se comprime el zip.
+          dotnet publish src/NetDownReporter @common --self-contained -p:IncludeNativeLibrariesForSelfExtract=true -o out/portable
+          # Liviano: necesita el .NET 10 Desktop Runtime instalado.
+          dotnet publish src/NetDownReporter @common --self-contained false -o out/runtime
+          New-Item -ItemType Directory dist | Out-Null
+          Compress-Archive out/portable/NetDownReporter.exe "dist/NetDownReporter-$version-portable-win-x64.zip"
+          Copy-Item out/runtime/NetDownReporter.exe "dist/NetDownReporter-$version-net10-win-x64.exe"
+
+      - name: Crear release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create ${{ github.ref_name }} (Get-ChildItem dist).FullName --generate-notes
