@@ -1,52 +1,58 @@
 # NetDown Reporter
 
-App de bandeja para **Windows 11** que vigila la conexión a internet, hace sonar una alarma cuando se corta y registra cada corte para armar un reporte con patrones (hora del día, día de la semana, causa). La idea es juntar evidencia para reclamarle al proveedor de internet.
+**English** | [Español](README.es.md)
 
-- **Alarma que se repite** hasta que vuelve internet, además de la notificación: sirve también cuando estás en un juego en pantalla completa, donde Windows silencia las notificaciones.
-- **Distingue la causa** de cada corte:
-  - **Sin WiFi**: la PC perdió la conexión al WiFi.
-  - **Router**: hay WiFi pero el router no responde.
-  - **ISP**: el router responde pero no hay salida a internet.
-- **Reconecta el WiFi sola** cuando Windows no lo hace hasta que abrís el panel de WiFi. Se puede desactivar desde el menú.
-- **Reporte HTML** sin dependencias externas: abre sin internet, con filtros, mapa de calor y línea de tiempo. También tiene en cuenta en qué horarios estuvo prendida la PC, para que "todos los cortes son de noche" no sea solo "la PC solo está prendida de noche".
-- **Liviana**: unos 13 MB de memoria y ~0,01% de CPU en segundo plano.
+A **Windows 11** tray app that watches your internet connection, sounds an alarm when it drops and logs every outage to build a report with patterns (time of day, day of the week, cause). The goal is to collect evidence for a complaint to your internet provider.
 
-## Descarga
+- **Repeating alarm** until the connection is back, on top of the notification. It also works while you're in a fullscreen game, where Windows silences notifications.
+- **Tells the cause** of each outage apart:
+  - **No WiFi**: the PC lost its WiFi connection.
+  - **Router**: WiFi is up but the router doesn't respond.
+  - **ISP**: the router responds but there's no way out to the internet.
+- **Reconnects WiFi on its own** when Windows won't until you open the WiFi panel. It can be turned off from the menu.
+- **HTML report** with no external dependencies: it opens offline, with filters, a heatmap and a timeline. It also accounts for when the PC was actually on, so "all outages happen at night" isn't just "the PC is only on at night".
+- **Lightweight**: about 13 MB of memory and ~0.01% CPU in the background.
 
-No se instala: es un solo `.exe`. En [Releases](../../releases) hay dos versiones:
+> The app's interface, the report and the data files are in Spanish.
 
-| Archivo | Descarga | Requisito |
+## Download
+
+There's nothing to install: it's a single `.exe`. [Releases](../../releases) has two versions:
+
+| File | Download | Requirement |
 |---|---|---|
-| `NetDownReporter-x.y.z-portable-win-x64.zip` | ~45 MB (el exe ocupa ~110 MB) | Ninguno. Trae .NET adentro. Descomprimilo y listo. |
-| `NetDownReporter-x.y.z-net10-win-x64.exe` | ~250 KB | Tener instalado el [.NET 10 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/10.0) (x64). |
+| `NetDownReporter-x.y.z-portable-win-x64.zip` | ~45 MB (the exe is ~110 MB) | None. .NET is bundled inside. Unzip it and run it. |
+| `NetDownReporter-x.y.z-net10-win-x64.exe` | ~250 KB | The [.NET 10 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/10.0) (x64) installed. |
 
-Las dos usan lo mismo de memoria. Si no sabés cuál bajar, usá la **portable**.
+Both use the same amount of memory. If you're not sure which one to get, use the **portable** one.
 
-El exe no está firmado, así que la primera vez Windows SmartScreen puede mostrar "Windows protegió su PC": tocá **Más información → Ejecutar de todas formas**.
+The exe isn't signed, so the first time Windows SmartScreen may show "Windows protected your PC": click **More info → Run anyway**.
 
-## Uso
+## Usage
 
-1. Poné el `.exe` en una carpeta fija (por ejemplo `C:\Programas\NetDownReporter\`) y abrilo. Aparece un punto en la bandeja: verde con internet, rojo sin internet, gris en pausa.
-2. Clic derecho en el ícono:
-   - **Abrir reporte**: genera y abre el reporte HTML (también con doble clic).
-   - **Silenciar alarma**: corta el sonido del corte en curso.
-   - **Reconectar WiFi automáticamente**: activado por defecto.
-   - **Iniciar con Windows**: guarda la ruta actual del exe; si lo movés de carpeta, volvé a activarlo.
-3. Para desinstalar: desactivá "Iniciar con Windows", cerrá la app y borrá el exe y la carpeta de datos.
+1. Put the `.exe` in a permanent folder (for example `C:\Programs\NetDownReporter\`) and run it. A dot shows up in the tray: green when online, red when offline, gray when paused.
+2. Right-click the icon:
+   - **Abrir reporte** (open report): builds and opens the HTML report (double-clicking the icon does the same).
+   - **Silenciar alarma** (silence alarm): stops the sound for the current outage.
+   - **Reconectar WiFi automáticamente** (reconnect WiFi automatically): on by default.
+   - **Iniciar con Windows** (start with Windows): saves the exe's current path; if you move it, turn it on again.
+3. To uninstall: turn off "Iniciar con Windows", exit the app and delete the exe and the data folder.
 
-### Dónde guarda los datos
+### Where the data goes
 
-En `%LOCALAPPDATA%\NetDownReporter\`, en texto plano para poder abrirlos en Excel:
+In `%LOCALAPPDATA%\NetDownReporter\`, as plain text so it can be opened in Excel:
 
-- `cortes.csv`: un renglón por corte (inicio, fin, duración, causa, nota, detalle del WiFi).
-- `sesiones.csv`: cuándo estuvo corriendo el monitor.
-- `reporte.html`: el último reporte generado.
+- `cortes.csv`: one row per outage (start, end, duration, cause, note, WiFi details).
+- `sesiones.csv`: when the monitor was running.
+- `reporte.html`: the last generated report.
 
-Las opciones del menú se guardan en `HKCU\Software\NetDownReporter`.
+The CSV files use `;` as the separator, so they open correctly in Excel with Spanish regional settings.
 
-## Compilar
+Menu options are stored in `HKCU\Software\NetDownReporter`.
 
-Requiere el [SDK de .NET 10](https://dotnet.microsoft.com/download/dotnet/10.0).
+## Building
+
+Requires the [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0).
 
 ```bash
 dotnet build NetDownReporter.slnx
@@ -54,25 +60,25 @@ dotnet test NetDownReporter.slnx
 dotnet publish src/NetDownReporter -c Release -o publish
 ```
 
-Versión portable (un solo exe con el runtime adentro):
+Portable version (a single exe with the runtime inside):
 
 ```bash
 dotnet publish src/NetDownReporter -c Release -r win-x64 --self-contained -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -o publish-portable
 ```
 
-No se usa `EnableCompressionInSingleFile`: el exe queda a la mitad, pero al descomprimirse en memoria la app pasa de ~13 MB a ~50 MB de RAM.
+`EnableCompressionInSingleFile` isn't used on purpose: it halves the exe, but since it's decompressed into memory the app goes from ~13 MB to ~50 MB of RAM.
 
-Hay una sola instancia por usuario: para probar cambios, primero cerrá la que está corriendo.
+Only one instance runs per user: to try changes, close the running one first.
 
-Los releases los arma GitHub Actions ([release.yml](.github/workflows/release.yml)) al subir un tag `vX.Y.Z`.
+Releases are built by GitHub Actions ([release.yml](.github/workflows/release.yml)) when a `vX.Y.Z` tag is pushed.
 
-## Contribuir
+## Contributing
 
-Se aceptan issues y pull requests. [CLAUDE.md](CLAUDE.md) explica la arquitectura y las decisiones de diseño, por ejemplo por qué no es un servicio de Windows o cómo se clasifican los cortes. Dos reglas:
+Issues and pull requests are welcome. [CLAUDE.md](CLAUDE.md) (in Spanish) explains the architecture and design decisions, such as why it isn't a Windows service or how outages are classified. Two rules:
 
-- Que siga consumiendo lo mínimo en segundo plano.
-- No agregar dependencias NuGet a la app sin necesidad real.
+- Keep it as light as possible in the background.
+- Don't add NuGet dependencies to the app unless they're really needed.
 
-## Licencia
+## License
 
 [MIT](LICENSE)
