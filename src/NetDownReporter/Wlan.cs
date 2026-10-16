@@ -11,6 +11,9 @@ static class Wlan
     const uint ClientVersion = 2;
     const int OpcodeCurrentConnection = 7;
     const int InterfaceStateConnected = 1;
+    const int InterfaceStateDisconnected = 4;
+    const uint NotificationSourceAcm = 0x8;
+    const int AcmScanComplete = 7, AcmScanFail = 8;
     const int ConnectionModeProfile = 0;
     const int BssTypeInfrastructure = 1;
     // WLAN_INTERFACE_INFO: GUID (16) + WCHAR[256] (512) + WLAN_INTERFACE_STATE (4).
@@ -33,14 +36,60 @@ static class Wlan
     }
 
     /// <summary>
-    /// Pide un escaneo en todas las interfaces (lo mismo que hace abrir el panel de WiFi) y, si hay perfil,
-    /// la conexión con ese perfil. Los dos pedidos son asíncronos en el driver: vuelven enseguida.
+    /// Pide un escaneo en todas las interfaces (lo mismo que hace abrir el panel de WiFi) y espera a que
+    /// Windows avise que terminó, o como mucho <paramref name="timeout"/>. Un escaneo suele tardar 1–3 s.
     /// </summary>
     /// <returns>Descripción del error si alguna llamada falló; null si se aceptaron.</returns>
-    public static string? Scan() => Use((handle, guid, _) => Check("WlanScan", WlanScan(handle, ref guid, 0, 0, 0)));
-
-    public static string? Connect(string profile) => Use((handle, guid, _) =>
+    public static async Task<string?> ScanAsync(TimeSpan timeout)
     {
+        // Las notificaciones llegan en un hilo de wlanapi: no hay que cerrar el handle desde ahí.
+        var done = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        // Escaneos sin terminar, más 1 hasta haberlos pedido todos (para no terminar antes de tiempo).
+        var pending = 1;
+        WlanNotificationCallback callback = (data, _) =>
+        {
+            var code = Marshal.ReadInt32(data + 4);
+            if ((uint)Marshal.ReadInt32(data) == NotificationSourceAcm && code is AcmScanComplete or AcmScanFail
+                && Interlocked.Decrement(ref pending) == 0) done.TrySetResult();
+        };
+        try
+        {
+            var result = WlanOpenHandle(ClientVersion, 0, out _, out var handle);
+            if (result != 0) return $"WlanOpenHandle error {result}";
+            try
+            {
+                // Si no se puede registrar, se espera el timeout completo como antes. Sin ignorar duplicados:
+                // si no, Windows descarta el aviso de fin de escaneo cuando es igual al del intento anterior.
+                WlanRegisterNotification(handle, NotificationSourceAcm, false, callback, 0, 0, out _);
+                var error = ForEachInterface(handle, (guid, _) =>
+                {
+                    var e = Check("WlanScan", WlanScan(handle, ref guid, 0, 0, 0));
+                    if (e is null) Interlocked.Increment(ref pending);
+                    return e;
+                });
+                if (Interlocked.Decrement(ref pending) == 0) done.TrySetResult();
+                await Task.WhenAny(done.Task, Task.Delay(timeout));
+                return error;
+            }
+            finally
+            {
+                WlanCloseHandle(handle, 0);
+                GC.KeepAlive(callback);
+            }
+        }
+        catch (DllNotFoundException)
+        {
+            return "wlanapi.dll no disponible";
+        }
+    }
+
+    /// <summary>
+    /// Pide la conexión con <paramref name="profile"/> en las interfaces desconectadas. Una interfaz que ya
+    /// está conectándose se deja tranquila: pedirle otra conexión la haría empezar de cero.
+    /// </summary>
+    public static string? Connect(string profile) => Use((handle, guid, state) =>
+    {
+        if (state != InterfaceStateDisconnected) return null;
         var p = new ConnectionParameters
         {
             Mode = ConnectionModeProfile,
@@ -56,34 +105,39 @@ static class Wlan
     /// <returns>El primer error; null si no hubo.</returns>
     static string? Use(Func<nint, Guid, int, string?> action)
     {
-        string? error = null;
         try
         {
             var result = WlanOpenHandle(ClientVersion, 0, out _, out var handle);
             if (result != 0) return $"WlanOpenHandle error {result}";
-            try
-            {
-                if ((result = WlanEnumInterfaces(handle, 0, out var list)) != 0) return $"WlanEnumInterfaces error {result}";
-                try
-                {
-                    var count = Marshal.ReadInt32(list);
-                    if (count == 0) return "sin interfaz WiFi";
-                    for (var i = 0; i < count; i++)
-                    {
-                        var item = list + 8 + i * InterfaceInfoSize;
-                        error ??= action(handle, Marshal.PtrToStructure<Guid>(item), Marshal.ReadInt32(item + InterfaceInfoSize - 4));
-                    }
-                }
-                finally { WlanFreeMemory(list); }
-            }
+            try { return ForEachInterface(handle, (guid, state) => action(handle, guid, state)); }
             finally { WlanCloseHandle(handle, 0); }
-            return error;
         }
         catch (DllNotFoundException)
         {
             // Windows sin el servicio WLAN (p. ej. una PC sólo con cable).
             return "wlanapi.dll no disponible";
         }
+    }
+
+    static string? ForEachInterface(nint handle, Func<Guid, int, string?> action)
+    {
+        var result = WlanEnumInterfaces(handle, 0, out var list);
+        if (result != 0) return $"WlanEnumInterfaces error {result}";
+        try
+        {
+            var count = Marshal.ReadInt32(list);
+            if (count == 0) return "sin interfaz WiFi";
+            string? error = null;
+            for (var i = 0; i < count; i++)
+            {
+                var item = list + 8 + i * InterfaceInfoSize;
+                // Sin ??= directo: después de un error hay que seguir con las otras interfaces.
+                var e = action(Marshal.PtrToStructure<Guid>(item), Marshal.ReadInt32(item + InterfaceInfoSize - 4));
+                error ??= e;
+            }
+            return error;
+        }
+        finally { WlanFreeMemory(list); }
     }
 
     [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
@@ -115,6 +169,13 @@ static class Wlan
 
     [DllImport("wlanapi.dll")]
     static extern uint WlanConnect(nint handle, ref Guid interfaceGuid, ref ConnectionParameters parameters, nint reserved);
+
+    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    delegate void WlanNotificationCallback(nint data, nint context);
+
+    [DllImport("wlanapi.dll")]
+    static extern uint WlanRegisterNotification(nint handle, uint notificationSource, bool ignoreDuplicate,
+        WlanNotificationCallback callback, nint context, nint reserved, out uint previousSource);
 
     [DllImport("wlanapi.dll")]
     static extern void WlanFreeMemory(nint memory);

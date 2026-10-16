@@ -14,6 +14,8 @@ sealed class TrayApp : ApplicationContext
 {
     static readonly TimeSpan CheckInterval = TimeSpan.FromSeconds(5);
     static readonly TimeSpan PendingRecheck = TimeSpan.FromSeconds(1);
+    // Sin WiFi el ping falla al instante (no hay ruta): chequear seguido no cuesta y acorta el corte.
+    static readonly TimeSpan WifiRecheck = TimeSpan.FromMilliseconds(500);
     static readonly TimeSpan HeartbeatInterval = TimeSpan.FromMinutes(1);
     // Al arrancar o volver de suspensión el WiFi tarda en conectarse: no es un corte.
     static readonly TimeSpan Grace = TimeSpan.FromSeconds(30);
@@ -22,7 +24,8 @@ sealed class TrayApp : ApplicationContext
     const string RunValue = "NetDownReporter";
     const string ApprovedKey = @"Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run";
     const string SettingsKey = @"Software\NetDownReporter";
-    // WlanScan tarda hasta 4 s; recién después Windows ve la red para conectarse.
+    // WlanScan tarda hasta 4 s; recién después Windows ve la red para conectarse. Se conecta apenas
+    // Windows avisa que terminó el escaneo, y esto es el tope por si el aviso no llega.
     static readonly TimeSpan ScanWait = TimeSpan.FromSeconds(4);
 
     readonly OutageLog log = new(OutageLog.DefaultDir);
@@ -92,23 +95,30 @@ sealed class TrayApp : ApplicationContext
     /// </summary>
     async Task CheckAsync()
     {
-        while (!checking && !suspended && DateTime.Now >= graceUntil)
+        // Un solo loop a la vez, también mientras espera el rechequeo: si no, cada tick y cada aviso
+        // de red durante un corte de WiFi sumarían otro loop de 0,5 s.
+        if (checking) return;
+        checking = true;
+        try
         {
-            var now = DateTime.Now;
-            if (now - lastHeartbeat >= HeartbeatInterval) SaveState(now);
+            while (!suspended && DateTime.Now >= graceUntil)
+            {
+                var now = DateTime.Now;
+                if (now - lastHeartbeat >= HeartbeatInterval) SaveState(now);
 
-            var started = epoch;
-            checking = true;
-            Cause? failure;
-            try { failure = await NetworkProbe.CheckAsync(); }
-            finally { checking = false; }
-            if (started != epoch || suspended) return;
-            Handle(now, failure);
+                var started = epoch;
+                var failure = await NetworkProbe.CheckAsync();
+                if (started != epoch || suspended) return;
+                Handle(now, failure);
 
-            // Un fallo suelto de router/ISP se confirma o descarta enseguida, no en 5 s.
-            if (!tracker.Pending) return;
-            await Task.Delay(PendingRecheck);
+                // Un fallo suelto de router/ISP se confirma o descarta enseguida, no en 5 s; sin WiFi se
+                // chequea seguido para notar al instante que volvió (y lanzar a tiempo cada reintento).
+                if (tracker.Pending) await Task.Delay(PendingRecheck);
+                else if (tracker.Current is not null && tracker.LastFailure == Cause.Wifi) await Task.Delay(WifiRecheck);
+                else return;
+            }
         }
+        finally { checking = false; }
     }
 
     void OnNetworkChanged(object? sender, EventArgs e) => ui.Post(_ => _ = CheckAsync(), null);
@@ -151,9 +161,17 @@ sealed class TrayApp : ApplicationContext
 
     async Task ReconnectAsync(DateTime outageStart)
     {
+        // Primer intento: la red se cortó hace segundos y sigue en la lista que ya tiene Windows, así que
+        // se pide la conexión sin esperar a un escaneo. Los reintentos escanean primero.
+        if (reconnector.Attempts == 1 && wifiProfile is not null)
+        {
+            reconnector.Completed(DateTime.Now, Wlan.Connect(wifiProfile));
+            if (reconnector.Note() is { } first) tracker.SetNote(first);
+            return;
+        }
+
         var started = epoch;
-        var error = Wlan.Scan();
-        await Task.Delay(ScanWait);
+        var error = await Wlan.ScanAsync(ScanWait);
         // Si se suspendió la PC o el corte ya terminó, el intento queda descartado.
         if (started != epoch || tracker.Current?.Start != outageStart) return;
 
