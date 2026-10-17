@@ -11,6 +11,7 @@ App de bandeja para **Windows 11** que vigila la conexión a internet, hace sona
   - **ISP**: el router responde pero no hay salida a internet.
 - **Reconecta el WiFi sola** cuando Windows no lo hace hasta que abrís el panel de WiFi. Se puede desactivar desde el menú.
 - **Reporte HTML** sin dependencias externas: abre sin internet, con filtros, mapa de calor y línea de tiempo. También tiene en cuenta en qué horarios estuvo prendida la PC, para que "todos los cortes son de noche" no sea solo "la PC solo está prendida de noche".
+- **Desconexiones de WiFi que registra Windows** en el reporte: lee el log de WLAN-AutoConfig al generar el reporte, así que también muestra las de antes de instalar la app o con la app cerrada, con el intervalo entre una y otra para que se vean cortes periódicos (por ejemplo, cada 4 horas).
 - **Liviana**: unos 13 MB de memoria y ~0,01% de CPU en segundo plano.
 
 ## Descarga

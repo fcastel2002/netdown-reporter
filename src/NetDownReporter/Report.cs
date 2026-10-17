@@ -13,7 +13,8 @@ public static class Report
 
     /// <param name="ongoing">Corte en curso, se muestra como terminado ahora.</param>
     /// <param name="sessionStart">Inicio de la sesión actual, que todavía no está en sesiones.csv.</param>
-    public static string Write(OutageLog log, Outage? ongoing, DateTime sessionStart, DateTime now)
+    /// <param name="wlan">Desconexiones de WiFi del log de Windows (<see cref="WlanEventLog.Read"/>).</param>
+    public static string Write(OutageLog log, Outage? ongoing, DateTime sessionStart, DateTime now, IEnumerable<WlanDisconnect> wlan)
     {
         var outages = log.ReadOutages().Select(o => Row(o, o.End!.Value, false)).ToList();
         if (ongoing is not null) outages.Add(Row(ongoing, now, true));
@@ -22,7 +23,8 @@ public static class Report
             .Select(s => new { start = Iso(s.Start), end = Iso(s.End) });
 
         // El encoder por defecto escapa '<' y '>', así que el JSON no puede cerrar el <script>.
-        var json = JsonSerializer.Serialize(new { generated = Iso(now), outages, sessions });
+        var disconnects = wlan.Select(d => new { time = Iso(d.Time), ssid = d.Ssid, reason = d.Reason });
+        var json = JsonSerializer.Serialize(new { generated = Iso(now), outages, sessions, disconnects });
 
         using var stream = typeof(Report).Assembly.GetManifestResourceStream("report.html")!;
         var html = new StreamReader(stream).ReadToEnd().Replace(Placeholder, json);

@@ -261,7 +261,7 @@ sealed class TrayApp : ApplicationContext
 
     void OpenReport()
     {
-        try { Shell(Report.Write(log, tracker.Current, sessionStart, DateTime.Now)); }
+        try { Shell(Report.Write(log, tracker.Current, sessionStart, DateTime.Now, WlanEventLog.Read())); }
         catch (Exception e) { MessageBox.Show(e.Message, "No se pudo generar el reporte", MessageBoxButtons.OK, MessageBoxIcon.Error); }
     }
 

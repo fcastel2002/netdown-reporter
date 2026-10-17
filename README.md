@@ -11,6 +11,7 @@ A **Windows 11** tray app that watches your internet connection, sounds an alarm
   - **ISP**: the router responds but there's no way out to the internet.
 - **Reconnects WiFi on its own** when Windows won't until you open the WiFi panel. It can be turned off from the menu.
 - **HTML report** with no external dependencies: it opens offline, with filters, a heatmap and a timeline. It also accounts for when the PC was actually on, so "all outages happen at night" isn't just "the PC is only on at night".
+- **Windows' own WiFi disconnect log** in the report: it reads the WLAN-AutoConfig event log when the report is built, so it also shows disconnects from before the app was installed or while it was closed, with the interval between them to reveal periodic drops (for example, every 4 hours).
 - **Lightweight**: about 13 MB of memory and ~0.01% CPU in the background.
 
 > The app's interface, the report and the data files are in Spanish.
