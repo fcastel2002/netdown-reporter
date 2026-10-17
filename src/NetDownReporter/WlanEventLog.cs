@@ -9,7 +9,8 @@ public sealed record WlanDisconnect(DateTime Time, string Ssid, string Reason);
 
 /// <summary>
 /// Lee del log de Windows las desconexiones de WiFi, incluidas las de antes de instalar la app
-/// y las ocurridas con la app cerrada. Solo se usa al generar el reporte, nunca en segundo plano.
+/// y las ocurridas con la app cerrada. Se lee al generar el reporte y, para prever cortes periódicos,
+/// solo los últimos días al arrancar y al terminar cada corte (nunca en un loop).
 /// </summary>
 public static class WlanEventLog
 {
@@ -18,12 +19,14 @@ public static class WlanEventLog
     static readonly XNamespace Ns = "http://schemas.microsoft.com/win/2004/08/events/event";
 
     /// <summary>Desconexiones en orden cronológico, en hora local. Vacío si el log no existe o no se puede leer.</summary>
-    public static List<WlanDisconnect> Read()
+    /// <param name="within">Solo las de este último tiempo; null para todas.</param>
+    public static List<WlanDisconnect> Read(TimeSpan? within = null)
     {
         var list = new List<WlanDisconnect>();
         try
         {
-            var query = new EventLogQuery(LogName, PathType.LogName, $"*[System[EventID={DisconnectId}]]");
+            var age = within is { } w ? $" and TimeCreated[timediff(@SystemTime) <= {(long)w.TotalMilliseconds}]" : "";
+            var query = new EventLogQuery(LogName, PathType.LogName, $"*[System[EventID={DisconnectId}{age}]]");
             using var reader = new EventLogReader(query);
             for (var e = reader.ReadEvent(); e is not null; e = reader.ReadEvent())
                 using (e)

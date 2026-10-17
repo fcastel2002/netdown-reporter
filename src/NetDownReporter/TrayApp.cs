@@ -20,6 +20,9 @@ sealed class TrayApp : ApplicationContext
     // Al arrancar o volver de suspensión el WiFi tarda en conectarse: no es un corte.
     static readonly TimeSpan Grace = TimeSpan.FromSeconds(30);
     const string AlarmWav = @"C:\Windows\Media\Alarm01.wav";
+    // Distinto de la alarma, y corto: suena una sola vez antes de un corte previsto.
+    const string WarningWav = @"C:\Windows\Media\Windows Notify Calendar.wav";
+    static readonly TimeSpan WarnBefore = TimeSpan.FromMinutes(1);
     const string RunKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
     const string RunValue = "NetDownReporter";
     const string ApprovedKey = @"Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run";
@@ -33,11 +36,13 @@ sealed class TrayApp : ApplicationContext
     readonly WifiReconnector reconnector = new();
     readonly NotifyIcon tray = new();
     readonly ToolStripMenuItem statusItem = new() { Enabled = false };
+    readonly ToolStripMenuItem nextCutItem = new() { Enabled = false, Visible = false };
     readonly ToolStripMenuItem silenceItem = new("Silenciar alarma") { Enabled = false };
     readonly ToolStripMenuItem autostartItem = new("Iniciar con Windows") { CheckOnClick = true };
     readonly ToolStripMenuItem reconnectItem = new("Reconectar WiFi automáticamente") { CheckOnClick = true };
     readonly Icon okIcon = Dot(Color.FromArgb(46, 160, 67)), downIcon = Dot(Color.FromArgb(218, 54, 51)), idleIcon = Dot(Color.Gray);
     readonly SoundPlayer? alarm = File.Exists(AlarmWav) ? new SoundPlayer(AlarmWav) : null;
+    readonly SoundPlayer? warning = File.Exists(WarningWav) ? new SoundPlayer(WarningWav) : null;
     readonly SynchronizationContext ui;
 
     DateTime sessionStart, graceUntil, lastHeartbeat, profileCheckedAt;
@@ -46,6 +51,9 @@ sealed class TrayApp : ApplicationContext
     bool suspended, checking;
     // Cambia en cada suspensión/reanudación: un chequeo que estaba en vuelo se descarta.
     int epoch;
+    // Ciclo de cortes del router, si lo hay (ver CutPredictor), y el corte previsto que ya se avisó.
+    CutSchedule? schedule;
+    DateTime warnedFor;
 
     public TrayApp()
     {
@@ -63,7 +71,7 @@ sealed class TrayApp : ApplicationContext
         var menu = new ContextMenuStrip();
         menu.Items.AddRange(new ToolStripItem[]
         {
-            statusItem, new ToolStripSeparator(), silenceItem,
+            statusItem, nextCutItem, new ToolStripSeparator(), silenceItem,
             new ToolStripMenuItem("Abrir reporte", null, (_, _) => OpenReport()),
             new ToolStripMenuItem("Abrir carpeta de datos", null, (_, _) => Shell(log.Dir)),
             reconnectItem, autostartItem, new ToolStripSeparator(),
@@ -85,7 +93,11 @@ sealed class TrayApp : ApplicationContext
     async Task RunAsync()
     {
         using var timer = new PeriodicTimer(CheckInterval);
-        do await CheckAsync();
+        do
+        {
+            WarnOfCut(DateTime.Now);
+            await CheckAsync();
+        }
         while (await timer.WaitForNextTickAsync());
     }
 
@@ -139,6 +151,8 @@ sealed class TrayApp : ApplicationContext
                 log.Append(o);
                 SaveState(at);
                 StopAlarm();
+                // Windows ya registró la desconexión: puede confirmar o corregir el ciclo.
+                LoadSchedule();
                 tray.ShowBalloonTip(5_000, "Volvió internet",
                     $"El corte duró {Labels.Duration(o.Duration)} ({Labels.Short(o.Cause)}).", ToolTipIcon.Info);
                 break;
@@ -182,6 +196,33 @@ sealed class TrayApp : ApplicationContext
         if (reconnector.Note() is { } note) tracker.SetNote(note);
     }
 
+    void LoadSchedule()
+    {
+        var now = DateTime.Now;
+        schedule = CutPredictor.Find(WlanEventLog.Read(CutPredictor.Window).Select(d => d.Time), now);
+        UpdateNextCut(now);
+    }
+
+    /// <summary>Avisa una sola vez, un minuto antes, del próximo corte del ciclo del router.</summary>
+    void WarnOfCut(DateTime now)
+    {
+        UpdateNextCut(now);
+        if (schedule is null || suspended || tracker.Current is not null) return;
+        var next = schedule.NextAfter(now);
+        if (next - now > WarnBefore || next == warnedFor) return;
+        warnedFor = next;
+        if (warning is not null) warning.Play();
+        else SystemSounds.Exclamation.Play();
+        tray.ShowBalloonTip(10_000, "Corte previsto en 1 minuto",
+            $"El router corta el WiFi cada {schedule.Period.TotalHours:0.#} h: el próximo sería a las {next:HH:mm:ss}.", ToolTipIcon.Warning);
+    }
+
+    void UpdateNextCut(DateTime now)
+    {
+        nextCutItem.Visible = schedule is not null;
+        if (schedule is not null) nextCutItem.Text = $"Próximo corte previsto: {schedule.NextAfter(now):HH:mm}";
+    }
+
     void RememberProfile(DateTime at)
     {
         profileCheckedAt = at;
@@ -221,6 +262,7 @@ sealed class TrayApp : ApplicationContext
         sessionStart = DateTime.Now;
         graceUntil = sessionStart + Grace;
         SaveState(sessionStart);
+        LoadSchedule();
     }
 
     void EndSession(string note)
@@ -350,6 +392,7 @@ sealed class TrayApp : ApplicationContext
         tray.Visible = false;
         tray.Dispose();
         alarm?.Dispose();
+        warning?.Dispose();
         base.ExitThreadCore();
     }
 }
