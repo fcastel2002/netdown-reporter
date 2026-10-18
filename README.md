@@ -35,7 +35,7 @@ The exe isn't signed, so the first time Windows SmartScreen may show "Windows pr
    - **Abrir reporte** (open report): builds and opens the HTML report (double-clicking the icon does the same).
    - **Silenciar alarma** (silence alarm): stops the sound for the current outage.
    - **Reconectar WiFi automáticamente** (reconnect WiFi automatically): on by default.
-   - **Iniciar con Windows** (start with Windows): saves the exe's current path; if you move it, turn it on again.
+   - **Iniciar con Windows** (start with Windows): saves the exe's current path. If you move it or download a new version, it updates itself the next time you open it by hand.
 3. To uninstall: turn off "Iniciar con Windows", exit the app and delete the exe and the data folder.
 
 ### Where the data goes

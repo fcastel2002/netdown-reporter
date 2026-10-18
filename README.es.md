@@ -33,7 +33,7 @@ El exe no está firmado, así que la primera vez Windows SmartScreen puede mostr
    - **Abrir reporte**: genera y abre el reporte HTML (también con doble clic).
    - **Silenciar alarma**: corta el sonido del corte en curso.
    - **Reconectar WiFi automáticamente**: activado por defecto.
-   - **Iniciar con Windows**: guarda la ruta actual del exe; si lo movés de carpeta, volvé a activarlo.
+   - **Iniciar con Windows**: guarda la ruta actual del exe. Si lo movés o bajás otra versión, se actualiza sola la próxima vez que lo abras a mano.
 3. Para desinstalar: desactivá "Iniciar con Windows", cerrá la app y borrá el exe y la carpeta de datos.
 
 ### Dónde guarda los datos

@@ -19,7 +19,7 @@ dotnet publish src/NetDownReporter -c Release -o publish    # exe estable (publi
 
 Los releases los arma `.github/workflows/release.yml` al subir un tag `vX.Y.Z`: un zip portable (self-contained, single-file) y un exe chico que necesita el .NET 10 Desktop Runtime. El portable va **sin** `EnableCompressionInSingleFile`: comprimido, la app usa ~50 MB de memoria privada en vez de ~13 MB.
 
-Para probar cambios en la app, primero hay que cerrar la instancia que está corriendo (`Stop-Process -Name NetDownReporter`), porque un mutex deja una sola instancia por usuario. "Iniciar con Windows" guarda la ruta del exe actual en `HKCU\...\Run`, así que hay que activarlo desde `publish\` y no desde `bin\Debug`.
+Para probar cambios en la app, primero hay que cerrar la instancia que está corriendo (`Stop-Process -Name NetDownReporter`), porque un mutex deja una sola instancia por usuario. "Iniciar con Windows" guarda la ruta del exe actual en `HKCU\...\Run`, así que hay que activarlo desde `publish\` y no desde `bin\Debug` (al arrancar solo se reapunta si el exe registrado ya no existe). Al activarlo también borra el valor de `StartupApproved\Run` (lo deja el Administrador de tareas al desactivarlo) y el stream `Zone.Identifier` del exe: con la marca de la web, Windows no arranca el exe al iniciar sesión aunque se haya aceptado SmartScreen.
 
 ## Arquitectura
 

@@ -20,6 +20,7 @@ sealed class TrayApp : ApplicationContext
     const string AlarmWav = @"C:\Windows\Media\Alarm01.wav";
     const string RunKey = @"Software\Microsoft\Windows\CurrentVersion\Run";
     const string RunValue = "NetDownReporter";
+    const string ApprovedKey = @"Software\Microsoft\Windows\CurrentVersion\Explorer\StartupApproved\Run";
     const string SettingsKey = @"Software\NetDownReporter";
     // WlanScan tarda hasta 4 s; recién después Windows ve la red para conectarse.
     static readonly TimeSpan ScanWait = TimeSpan.FromSeconds(4);
@@ -51,6 +52,7 @@ sealed class TrayApp : ApplicationContext
 
         silenceItem.Click += (_, _) => StopAlarm();
         autostartItem.Checked = IsAutostart();
+        if (autostartItem.Checked) RefreshAutostart();
         autostartItem.Click += (_, _) => SetAutostart(autostartItem.Checked);
         wifiProfile = GetSetting("WifiProfile") as string;
         reconnectItem.Checked = reconnector.Enabled = GetSetting("AutoReconnect") is not 0;
@@ -247,17 +249,54 @@ sealed class TrayApp : ApplicationContext
 
     static void Shell(string path) => Process.Start(new ProcessStartInfo(path) { UseShellExecute = true });
 
+    /// <summary>
+    /// Está en Run y no fue desactivada desde el Administrador de tareas, que lo marca en StartupApproved
+    /// (primer byte impar) sin borrar la entrada de Run.
+    /// </summary>
     static bool IsAutostart()
     {
-        using var key = Registry.CurrentUser.OpenSubKey(RunKey);
-        return key?.GetValue(RunValue) is string;
+        using var run = Registry.CurrentUser.OpenSubKey(RunKey);
+        if (run?.GetValue(RunValue) is not string) return false;
+        using var approved = Registry.CurrentUser.OpenSubKey(ApprovedKey);
+        return approved?.GetValue(RunValue) is not byte[] { Length: > 0 } flags || (flags[0] & 1) == 0;
     }
 
     static void SetAutostart(bool enabled)
     {
-        using var key = Registry.CurrentUser.CreateSubKey(RunKey);
-        if (enabled) key.SetValue(RunValue, $"\"{Application.ExecutablePath}\"");
-        else key.DeleteValue(RunValue, throwOnMissingValue: false);
+        using var run = Registry.CurrentUser.CreateSubKey(RunKey);
+        if (!enabled)
+        {
+            run.DeleteValue(RunValue, throwOnMissingValue: false);
+            return;
+        }
+        run.SetValue(RunValue, $"\"{Application.ExecutablePath}\"");
+        using (var approved = Registry.CurrentUser.OpenSubKey(ApprovedKey, writable: true))
+            approved?.DeleteValue(RunValue, throwOnMissingValue: false);
+        Unblock();
+    }
+
+    /// <summary>
+    /// Si el exe registrado ya no existe (se movió o se bajó otra versión), apunta al actual; si es el actual,
+    /// le saca la marca de la web por si se registró con una versión anterior.
+    /// </summary>
+    static void RefreshAutostart()
+    {
+        using var run = Registry.CurrentUser.OpenSubKey(RunKey);
+        if (run?.GetValue(RunValue) is not string value) return;
+        var path = value.Trim('"');
+        if (!File.Exists(path)) SetAutostart(true);
+        else if (string.Equals(path, Application.ExecutablePath, StringComparison.OrdinalIgnoreCase)) Unblock();
+    }
+
+    /// <summary>
+    /// El exe bajado de internet trae la marca de la web (Zone.Identifier) aunque en SmartScreen se haya elegido
+    /// "Ejecutar de todas formas", y al iniciar sesión Windows no lo arranca. Si la app ya está corriendo, el
+    /// usuario confía en el exe.
+    /// </summary>
+    static void Unblock()
+    {
+        try { File.Delete(Application.ExecutablePath + ":Zone.Identifier"); }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
     }
 
     static object? GetSetting(string name)
