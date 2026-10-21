@@ -34,6 +34,7 @@ The exe isn't signed, so the first time Windows SmartScreen may show "Windows pr
 1. Put the `.exe` in a permanent folder (for example `C:\Programs\NetDownReporter\`) and run it. A dot shows up in the tray: green when online, red when offline, gray when paused.
 2. Right-click the icon:
    - **Abrir reporte** (open report): builds and opens the HTML report (double-clicking the icon does the same).
+   - **Abrir informe para el reclamo** (open claim report): a plain-language report to show your ISP: how often the connection drops, whether it follows a fixed cycle and when the next drop is expected.
    - **Silenciar alarma** (silence alarm): stops the sound for the current outage.
    - **Reconectar WiFi automáticamente** (reconnect WiFi automatically): on by default.
    - **Iniciar con Windows** (start with Windows): saves the exe's current path. If you move it or download a new version, it updates itself the next time you open it by hand.
@@ -46,6 +47,7 @@ In `%LOCALAPPDATA%\NetDownReporter\`, as plain text so it can be opened in Excel
 - `cortes.csv`: one row per outage (start, end, duration, cause, note, WiFi details).
 - `sesiones.csv`: when the monitor was running.
 - `reporte.html`: the last generated report.
+- `reclamo.html`: the last generated claim report.
 
 The CSV files use `;` as the separator, so they open correctly in Excel with Spanish regional settings.
 

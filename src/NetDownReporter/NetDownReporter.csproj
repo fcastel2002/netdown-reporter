@@ -16,6 +16,7 @@
 
   <ItemGroup>
     <EmbeddedResource Include="report.html" LogicalName="report.html" />
+    <EmbeddedResource Include="claim.html" LogicalName="claim.html" />
     <InternalsVisibleTo Include="NetDownReporter.Tests" />
   </ItemGroup>
 

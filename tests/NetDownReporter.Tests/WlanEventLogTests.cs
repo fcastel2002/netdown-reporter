@@ -13,6 +13,7 @@ public class WlanEventLogTests
         var d = WlanEventLog.Parse(Disconnect)!;
         Assert.Equal("MiRed", d.Ssid);
         Assert.Equal("El controlador desconectó la red.", d.Reason);
+        Assert.Equal(0, d.Code);
         Assert.Equal(DateTimeKind.Local, d.Time.Kind);
         Assert.Equal(new DateTime(2026, 10, 17, 3, 11, 52, 962, DateTimeKind.Utc).AddTicks(6307), d.Time.ToUniversalTime());
     }
@@ -29,7 +30,12 @@ public class WlanEventLogTests
             """)!;
         Assert.Equal("", d.Ssid);
         Assert.Equal("", d.Reason);
+        Assert.Null(d.Code);
     }
+
+    [Fact]
+    public void ParsesReasonCodeOfLocalRequests() =>
+        Assert.Equal(11, WlanEventLog.Parse(Disconnect.Replace("'ReasonCode'>0<", "'ReasonCode'>11<"))!.Code);
 
     [Theory]
     [InlineData("no es xml")]

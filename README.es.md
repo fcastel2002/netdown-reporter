@@ -32,6 +32,7 @@ El exe no está firmado, así que la primera vez Windows SmartScreen puede mostr
 1. Poné el `.exe` en una carpeta fija (por ejemplo `C:\Programas\NetDownReporter\`) y abrilo. Aparece un punto en la bandeja: verde con internet, rojo sin internet, gris en pausa.
 2. Clic derecho en el ícono:
    - **Abrir reporte**: genera y abre el reporte HTML (también con doble clic).
+   - **Abrir informe para el reclamo**: un informe sin términos técnicos para mostrar al proveedor: cada cuánto se corta, si sigue un ciclo fijo y cuándo sería el próximo corte.
    - **Silenciar alarma**: corta el sonido del corte en curso.
    - **Reconectar WiFi automáticamente**: activado por defecto.
    - **Iniciar con Windows**: guarda la ruta actual del exe. Si lo movés o bajás otra versión, se actualiza sola la próxima vez que lo abras a mano.
@@ -44,6 +45,7 @@ En `%LOCALAPPDATA%\NetDownReporter\`, en texto plano para poder abrirlos en Exce
 - `cortes.csv`: un renglón por corte (inicio, fin, duración, causa, nota, detalle del WiFi).
 - `sesiones.csv`: cuándo estuvo corriendo el monitor.
 - `reporte.html`: el último reporte generado.
+- `reclamo.html`: el último informe para el reclamo.
 
 Las opciones del menú se guardan en `HKCU\Software\NetDownReporter`.
 

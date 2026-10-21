@@ -1,0 +1,501 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Informe de cortes</title>
+<style>
+  :root {
+    color-scheme: light;
+    --page: #f9f9f7;
+    --surface: #fcfcfb;
+    --ink: #0b0b0b;
+    --ink-2: #52514e;
+    --muted: #898781;
+    --grid: #e1e0d9;
+    --axis: #c3c2b7;
+    --ring: rgba(11, 11, 11, 0.10);
+    --accent: #d6453d;
+    --accent-soft: #fbe3e1;
+    --off: #b5b3aa;
+  }
+  /* Solo en pantalla: impreso o en PDF siempre sale claro. */
+  @media screen and (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --page: #0d0d0d;
+      --surface: #1a1a19;
+      --ink: #ffffff;
+      --ink-2: #c3c2b7;
+      --grid: #2c2c2a;
+      --axis: #383835;
+      --ring: rgba(255, 255, 255, 0.10);
+      --accent: #f0645b;
+      --accent-soft: #3a1d1b;
+      --off: #5f5e59;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--page);
+    color: var(--ink);
+    font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  main { max-width: 900px; margin: 0 auto; padding: 28px 16px 48px; }
+  header { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 8px 16px; }
+  header > div { flex: 1 1 320px; }
+  h1 { font-size: 24px; margin: 0 0 4px; }
+  h2 { font-size: 17px; margin: 0 0 4px; }
+  .sub { color: var(--ink-2); margin: 0 0 12px; }
+  button {
+    font: inherit; color: var(--ink); background: var(--surface); cursor: pointer;
+    border: 1px solid var(--axis); border-radius: 6px; padding: 6px 12px;
+  }
+  .lead { font-size: 19px; line-height: 1.45; margin: 20px 0; }
+  .tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 16px; }
+  @media (max-width: 640px) { .tiles { grid-template-columns: repeat(2, 1fr); } }
+  .tile, .card { background: var(--surface); border: 1px solid var(--ring); border-radius: 10px; padding: 14px 16px; }
+  .tile .label { color: var(--ink-2); font-size: 13px; }
+  .tile .value { font-size: 26px; font-weight: 600; margin-top: 2px; font-variant-numeric: tabular-nums; }
+  .tile .hint { color: var(--muted); font-size: 12px; }
+  .card { margin-bottom: 16px; }
+  .legend { display: flex; flex-wrap: wrap; gap: 4px 18px; color: var(--ink-2); font-size: 13px; margin: 8px 0; }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+  .dot.ring { border: 2px dashed var(--accent); width: 12px; height: 12px; }
+  svg { display: block; width: 100%; height: auto; }
+  svg text { fill: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+  .bars { display: grid; grid-template-columns: max-content 1fr max-content; gap: 8px 12px; align-items: center; }
+  .bars .lab { color: var(--ink-2); white-space: nowrap; }
+  .bars .track { height: 18px; }
+  .bars .bar { height: 100%; border-radius: 0 4px 4px 0; min-width: 2px; }
+  .bars .n { font-variant-numeric: tabular-nums; font-weight: 600; }
+  ul.points { margin: 0; padding-left: 20px; }
+  ul.points li { margin: 8px 0; }
+  .scroll { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--grid); vertical-align: top; }
+  th { color: var(--ink-2); font-weight: 600; }
+  td.day { white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .chip {
+    display: inline-block; margin: 0 6px 4px 0; padding: 1px 8px; border-radius: 10px;
+    background: var(--accent-soft); font-variant-numeric: tabular-nums;
+  }
+  .chip.grid { background: transparent; border: 1px solid var(--accent); }
+  .chip.off { background: transparent; color: var(--ink-2); border: 1px dashed var(--off); }
+  .note { color: var(--ink-2); font-size: 13px; }
+  .empty-state { color: var(--ink-2); padding: 24px 0; text-align: center; }
+  @page { margin: 14mm; }
+  @media print {
+    body { background: #fff; font-size: 13px; }
+    main { padding: 0; max-width: none; }
+    button { display: none; }
+    .card, .tile { break-inside: avoid; }
+    .card.long { break-inside: auto; }
+    tr { break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <div>
+      <h1>Informe de cortes de internet</h1>
+      <p class="sub" id="meta"></p>
+    </div>
+    <button type="button" onclick="window.print()">Imprimir / guardar PDF</button>
+  </header>
+
+  <p class="lead" id="lead"></p>
+  <div class="tiles" id="tiles"></div>
+
+  <section class="card" id="sec-chart">
+    <h2>Cada punto es un corte</h2>
+    <p class="sub" id="chart-sub"></p>
+    <div class="legend" id="chart-legend"></div>
+    <svg id="chart" role="img" aria-label="Hora de cada corte, día por día"></svg>
+  </section>
+
+  <section class="card" id="sec-gaps">
+    <h2>Tiempo entre un corte y el siguiente</h2>
+    <p class="sub" id="gaps-sub"></p>
+    <div class="bars" id="gaps"></div>
+  </section>
+
+  <section class="card">
+    <h2>Qué muestran estos datos</h2>
+    <ul class="points" id="points"></ul>
+  </section>
+
+  <section class="card long">
+    <h2>Todos los cortes, día por día</h2>
+    <p class="sub" id="days-sub"></p>
+    <div class="scroll"><table id="days"></table></div>
+  </section>
+
+  <p class="note" id="note"></p>
+</main>
+
+<script>
+const DATA = /*__DATA__*/null;
+
+const MIN = 60e3, HOUR = 60 * MIN, DAY = 24 * HOUR;
+// Margen para decir que un corte llegó "a horario": el reloj del router se corre segundos por ciclo.
+const TOL = 3 * MIN;
+const SVGNS = 'http://www.w3.org/2000/svg';
+const DAYS = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+
+const pad = n => String(n).padStart(2, '0');
+const fmtDate = d => `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()}`;
+const fmtTime = d => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+const fmtDay = d => `${DAYS[d.getDay()]} ${fmtDate(d)}`;
+const startOfDay = d => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+const addDays = (d, n) => new Date(d.getFullYear(), d.getMonth(), d.getDate() + n);
+const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+function fmtDur(ms) {
+  const s = Math.max(0, Math.round(ms / 1000));
+  if (s >= 3600) return `${Math.floor(s / 3600)} h ${pad(Math.floor(s % 3600 / 60))} min`;
+  if (s >= 60) return `${Math.floor(s / 60)} min ${pad(s % 60)} s`;
+  return `${s} s`;
+}
+const fmtExact = ms => {
+  const s = Math.round(ms / 1000);
+  return `${Math.floor(s / 3600)} h ${pad(Math.floor(s % 3600 / 60))} min ${pad(s % 60)} s`;
+};
+// "4 horas" si el período está a menos de 2 min de una hora entera; si no, el valor exacto.
+const fmtPeriod = ms => {
+  const h = Math.round(ms / HOUR);
+  return h >= 1 && Math.abs(ms - h * HOUR) < 2 * MIN ? plural(h, 'hora', 'horas') : fmtExact(ms);
+};
+const fmtHoursShort = ms => `${Math.round(ms / HOUR)} h`;
+// Redondeado al minuto: 3 h 44 min 57 s es «3 h 45 min».
+const fmtHM = ms => {
+  const m = Math.round(ms / MIN);
+  return `${Math.floor(m / 60)} h ${pad(m % 60)} min`;
+};
+
+function h(tag, text, parent, cls) {
+  const n = document.createElement(tag);
+  if (text != null) n.textContent = text;
+  if (cls) n.className = cls;
+  if (parent) parent.appendChild(n);
+  return n;
+}
+function el(tag, attrs, parent) {
+  const n = document.createElementNS(SVGNS, tag);
+  for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, v);
+  parent.appendChild(n);
+  return n;
+}
+
+const now = new Date(DATA.generated);
+const all = (DATA.disconnects || []).map(d => ({ ...d, time: new Date(d.time) })).sort((a, b) => a.time - b.time);
+// Las que pidió la propia PC (cambiar de red, apagar el WiFi) no son cortes del servicio.
+const local = all.filter(d => d.code != null && d.code !== 0);
+const cuts = all.filter(d => d.code == null || d.code === 0);
+const times = cuts.map(c => c.time.getTime());
+
+// Cuántos ciclos entran en el intervalo, o 0 si no cae a horario.
+const fits = (gap, period) => {
+  const k = Math.round(gap / period);
+  return k >= 1 && Math.abs(gap - k * period) <= TOL ? k : 0;
+};
+
+// Como CutPredictor, pero sobre todo el registro: el ciclo de 1 a 24 h en el que encajan más intervalos
+// (al menos 4 y la mitad). Un ciclo más corto encaja siempre en todos los de uno más largo (4 h es múltiplo
+// de 1 h) y además en algunos por casualidad (cualquier intervalo a ±3 min de una hora entera), así que
+// gana el más largo que explica casi todo lo que explica el mejor.
+function findCycle() {
+  const gaps = times.slice(1).map((t, i) => t - times[i]);
+  const candidates = [];
+  for (let hr = 1; hr <= 24; hr++) {
+    let n = 0, sgk = 0, skk = 0;
+    for (const g of gaps) {
+      const k = fits(g, hr * HOUR);
+      if (!k) continue;
+      n++; sgk += g * k; skk += k * k;
+    }
+    if (n >= 4 && n * 2 >= gaps.length) candidates.push({ hr, n, period: sgk / skk });
+  }
+  const max = Math.max(0, ...candidates.map(c => c.n));
+  return candidates.filter(c => c.n >= 0.9 * max).pop() || null;
+}
+
+const cycle = findCycle();
+const P = cycle && cycle.period;
+cuts.forEach((c, i) => {
+  c.gap = i ? times[i] - times[i - 1] : null;
+  c.k = P && c.gap != null ? fits(c.gap, P) : 0;
+});
+
+// Los cortes que no llegan a horario pueden caer igual en el mismo reloj, corridos una fracción exacta del
+// ciclo (en esta casa: 3 h 45 min o 4 h 15 min, en múltiplos de 15 min con segundos de error). Se busca la
+// fracción más gruesa (≥ 5 min) en la que encaja el 80 % de esos intervalos; al azar encajaría bastante menos.
+const TOL_FINE = 30e3;
+const fitsFine = (gap, q) => {
+  const j = Math.round(gap / q);
+  return j >= 1 && Math.abs(gap - j * q) <= TOL_FINE;
+};
+function findGrid() {
+  const off = cuts.filter(c => c.gap != null && !c.k);
+  if (off.length < 4) return null;
+  for (let m = 2; P / m >= 5 * MIN; m++) {
+    const n = off.filter(c => fitsFine(c.gap, P / m)).length;
+    if (n >= 0.8 * off.length) return { q: P / m, n, of: off.length, chance: off.length * 2 * TOL_FINE / (P / m) };
+  }
+  return null;
+}
+const grid = P ? findGrid() : null;
+cuts.forEach(c => { c.onGrid = !!grid && c.gap != null && !c.k && fitsFine(c.gap, grid.q); });
+
+// A horario si encaja con el anterior o con el siguiente (el primero después de un hueco largo, también).
+cuts.forEach((c, i) => {
+  const nx = cuts[i + 1];
+  c.inCycle = !!P && (c.k > 0 || (nx != null && nx.k > 0));
+  c.cls = c.inCycle ? 'cycle' : c.onGrid || (nx != null && nx.onGrid) ? 'grid' : 'off';
+});
+const inCycle = cuts.filter(c => c.inCycle).length;
+const onClock = cuts.filter(c => c.cls !== 'off').length;
+const fmtMinutes = ms => plural(Math.round(ms / MIN), 'minuto', 'minutos');
+const STYLE = {
+  cycle: { fill: 'var(--accent)', stroke: 'none', label: () => `Cada ${fmtPeriod(P)} exactas`, tip: 'a horario' },
+  grid: { fill: 'var(--surface)', stroke: 'var(--accent)', label: () => `Corrido ${fmtMinutes(grid.q)} o un múltiplo (mismo reloj)`, tip: 'mismo reloj, corrido' },
+  off: { fill: 'var(--off)', stroke: 'none', label: () => P ? 'Fuera del ciclo' : 'Corte', tip: 'fuera del ciclo' },
+};
+
+// Próximo corte, si el ciclo sigue vigente (el último corte a horario es de los últimos 2 días).
+const anchor = [...cuts].reverse().find(c => c.inCycle);
+const next = anchor && now - anchor.time <= 2 * DAY
+  ? new Date(anchor.time.getTime() + P * (Math.floor((now - anchor.time) / P) + 1)) : null;
+// Horarios del día, si el ciclo entra justo en 24 h (cada 4 h: seis horarios fijos).
+const perDay = P ? Math.round(DAY / P) : 0;
+const dailyTimes = next && perDay >= 1 && Math.abs(DAY - perDay * P) < 5 * MIN
+  ? Array.from({ length: perDay }, (_, i) => new Date(next.getTime() + i * P))
+      .sort((a, b) => (a.getHours() * 60 + a.getMinutes()) - (b.getHours() * 60 + b.getMinutes()))
+  : null;
+const fmtWhen = d => {
+  const days = Math.round((startOfDay(d) - startOfDay(now)) / DAY);
+  return days === 0 ? `hoy a las ${fmtTime(d)}` : days === 1 ? `mañana a las ${fmtTime(d)}` : `el ${fmtDay(d)} a las ${fmtTime(d)}`;
+};
+
+// Duración: solo la mide el monitor (Windows registra la desconexión, no cuándo volvió internet).
+const durations = DATA.outages.filter(o => !o.ongoing).map(o => new Date(o.end) - new Date(o.start)).sort((a, b) => a - b);
+const median = durations.length >= 3 ? durations[Math.floor((durations.length - 1) / 2)] : null;
+
+// Intervalos entre cortes, agrupados por cantidad de ciclos.
+const multiples = cuts.filter(c => c.k >= 2);
+
+function render() {
+  const first = cuts.length ? cuts[0].time : null, last = cuts.length ? cuts[cuts.length - 1].time : null;
+  const ssids = new Map();
+  for (const c of cuts) if (c.ssid) ssids.set(c.ssid, (ssids.get(c.ssid) || 0) + 1);
+  const ssid = [...ssids].sort((a, b) => b[1] - a[1])[0];
+  document.getElementById('meta').textContent = [
+    ssid ? `Red WiFi «${ssid[0]}»` : null,
+    first ? `Del ${fmtDate(first)} al ${fmtDate(last)}` : null,
+    `Generado el ${fmtDate(now)} a las ${fmtTime(now)}`,
+  ].filter(Boolean).join(' · ');
+
+  const lead = document.getElementById('lead');
+  if (!cuts.length) {
+    lead.textContent = 'Windows no tiene registrado ningún corte del WiFi en esta computadora.';
+    for (const id of ['sec-chart', 'sec-gaps']) document.getElementById(id).hidden = true;
+  } else if (P) {
+    lead.textContent = `Entre el ${fmtDate(first)} y el ${fmtDate(last)} la conexión WiFi se cortó ${plural(cuts.length, 'vez', 'veces')}. ` +
+      `Los cortes no son al azar: se repiten cada ${fmtPeriod(P)}, con segundos de diferencia.`;
+  } else {
+    lead.textContent = `Entre el ${fmtDate(first)} y el ${fmtDate(last)} la conexión WiFi se cortó ${plural(cuts.length, 'vez', 'veces')}. ` +
+      'No se encontró un ciclo fijo entre los cortes.';
+    document.getElementById('sec-gaps').hidden = true;
+  }
+
+  renderTiles(first, last);
+  if (cuts.length) renderChart(first, last);
+  if (P) renderGaps();
+  renderPoints();
+  renderDays();
+
+  document.getElementById('note').textContent =
+    'Datos: registro de eventos de Windows de esta computadora (WLAN-AutoConfig, evento 8003, "desconexión de la red WiFi"), ' +
+    'que guarda las desconexiones de las últimas semanas aunque el monitor no estuviera abierto. ' +
+    'Solo quedan registrados los cortes ocurridos con la computadora encendida.' +
+    (local.length ? ` Se dejaron afuera ${plural(local.length, 'desconexión pedida', 'desconexiones pedidas')} desde la propia computadora (por ejemplo, al cambiar de red o apagar el WiFi).` : '') +
+    ' Generado por NetDown Reporter; el detalle técnico completo está en reporte.html.';
+}
+
+function renderTiles(first, last) {
+  const tiles = document.getElementById('tiles');
+  const tile = (label, value, hint) => {
+    const t = h('div', null, tiles, 'tile');
+    h('div', label, t, 'label');
+    h('div', value, t, 'value');
+    if (hint) h('div', hint, t, 'hint');
+  };
+  const span = first ? Math.round((startOfDay(last) - startOfDay(first)) / DAY) + 1 : 0;
+  tile('Cortes registrados', String(cuts.length), first ? `en ${plural(span, 'día', 'días')}` : null);
+  if (P) {
+    tile('Se repiten cada', fmtPeriod(P), `exactamente ${fmtExact(P)}`);
+    tile('Llegaron a horario', `${inCycle} de ${cuts.length}`, `justo cada ${fmtPeriod(P)}`);
+    if (grid) tile('Siguen el mismo reloj', `${onClock} de ${cuts.length}`, `en múltiplos exactos de ${fmtMinutes(grid.q)}`);
+  }
+  if (median != null) tile('Duración típica', fmtDur(median), `medida en ${plural(durations.length, 'corte', 'cortes')}`);
+  if (next) tile('Próximo corte previsto', fmtTime(next), fmtWhen(next).replace(/ a las .*/, ''));
+}
+
+// Columna = día, altura = hora del día (00 h arriba, como una agenda). Filas de puntos = misma hora todos los días.
+function renderChart(first, last) {
+  const svg = document.getElementById('chart');
+  const day0 = startOfDay(first);
+  const lastDay = startOfDay(next && next > last ? next : last);
+  const nDays = Math.round((lastDay - day0) / DAY) + 1;
+  const W = 900, H = 380, L = 40, R = 8, T = 8, B = 26;
+  const cw = (W - L - R) / nDays;
+  svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  const x = d => L + (Math.round((startOfDay(d) - day0) / DAY) + 0.5) * cw;
+  const y = d => T + (H - T - B) * (d.getHours() * 60 + d.getMinutes() + d.getSeconds() / 60) / 1440;
+  const yh = hr => T + (H - T - B) * hr / 24;
+
+  for (let hr = 0; hr <= 24; hr += 2) {
+    el('line', { x1: L, x2: W - R, y1: yh(hr), y2: yh(hr), stroke: hr % 24 ? 'var(--grid)' : 'var(--axis)', 'stroke-width': 1 }, svg);
+    el('text', { x: L - 6, y: yh(hr) + 4, 'text-anchor': 'end' }, svg).textContent = `${pad(hr)} h`;
+  }
+  const step = Math.max(1, Math.ceil(nDays / 12));
+  for (let i = 0; i < nDays; i += step) {
+    const d = addDays(day0, i);
+    el('text', { x: L + (i + 0.5) * cw, y: H - 8, 'text-anchor': 'middle' }, svg).textContent = `${pad(d.getDate())}/${pad(d.getMonth() + 1)}`;
+  }
+
+  const r = Math.max(2.5, Math.min(5, cw / 2 - 1));
+  for (const c of cuts) {
+    const s = STYLE[c.cls];
+    const dot = el('circle', { cx: x(c.time), cy: y(c.time), r, fill: s.fill, stroke: s.stroke, 'stroke-width': 1.5 }, svg);
+    el('title', {}, dot).textContent = `${fmtDay(c.time)} ${fmtTime(c.time)} (${s.tip})`;
+  }
+  if (next) {
+    const ring = el('circle', { cx: x(next), cy: y(next), r: r + 3, fill: 'none', stroke: 'var(--accent)', 'stroke-width': 1.5, 'stroke-dasharray': '2 2' }, svg);
+    el('title', {}, ring).textContent = `Próximo corte previsto: ${fmtWhen(next)}`;
+  }
+
+  const legend = document.getElementById('chart-legend');
+  const item = (cls, s, label) => {
+    const span = h('span', null, legend);
+    const d = h('i', null, span, cls);
+    if (s) Object.assign(d.style, { background: s.fill, border: s.stroke === 'none' ? '' : `1.5px solid ${s.stroke}` });
+    span.appendChild(document.createTextNode(label));
+  };
+  for (const k of ['cycle', 'grid', 'off']) if (cuts.some(c => c.cls === k)) item('dot', STYLE[k], STYLE[k].label());
+  if (next) item('dot ring', null, 'Próximo corte previsto');
+
+  document.getElementById('chart-sub').textContent =
+    'Cada columna es un día y la altura del punto es la hora del corte. ' +
+    (P ? 'Los puntos forman filas porque los cortes caen a la misma hora día tras día; si las filas se corren, el ciclo empezó de nuevo desde otra hora. ' : '') +
+    'Donde faltan puntos, la computadora estaba apagada y no quedó registro.';
+}
+
+function renderGaps() {
+  const box = document.getElementById('gaps');
+  const gaps = cuts.filter(c => c.gap != null);
+  const rows = [
+    { label: fmtHoursShort(P), n: gaps.filter(c => c.k === 1).length, cycle: true },
+    { label: fmtHoursShort(2 * P), n: gaps.filter(c => c.k === 2).length, cycle: true },
+    { label: fmtHoursShort(3 * P), n: gaps.filter(c => c.k === 3).length, cycle: true },
+    { label: `${fmtHoursShort(4 * P)} o más`, n: gaps.filter(c => c.k >= 4).length, cycle: true },
+    ...(grid ? [{ label: `Otro múltiplo de ${Math.round(grid.q / MIN)} min`, n: gaps.filter(c => c.onGrid).length, grid: true }] : []),
+    { label: grid ? 'Irregular' : 'Otro intervalo', n: gaps.filter(c => !c.k && !c.onGrid).length },
+  ];
+  const max = Math.max(1, ...rows.map(r => r.n));
+  for (const r of rows) {
+    h('div', r.label, box, 'lab');
+    const bar = h('div', null, h('div', null, box, 'track'), 'bar');
+    bar.style.width = `${100 * r.n / max}%`;
+    bar.style.background = r.cycle ? 'var(--accent)' : r.grid ? 'var(--accent-soft)' : 'var(--off)';
+    if (r.grid) bar.style.border = '1.5px solid var(--accent)';
+    h('div', String(r.n), box, 'n');
+  }
+  document.getElementById('gaps-sub').textContent =
+    `Si los cortes fueran al azar, este tiempo cambiaría todo el tiempo. Acá casi siempre es ${fmtPeriod(P)} o un múltiplo justo ` +
+    `(${fmtHoursShort(2 * P)}, ${fmtHoursShort(3 * P)}…): los múltiplos aparecen cuando la computadora estuvo apagada durante ` +
+    'uno o más cortes, y el ciclo siguió corriendo igual.' +
+    (grid ? ` El resto también cae en múltiplos exactos de ${fmtMinutes(grid.q)} (por ejemplo, ${fmtHM(P - grid.q)} o ${fmtHM(P + grid.q)}).` : '');
+}
+
+function renderPoints() {
+  const ul = document.getElementById('points');
+  const point = (strong, text) => {
+    const li = h('li', null, ul);
+    h('strong', strong, li);
+    li.appendChild(document.createTextNode(' ' + text));
+  };
+  if (!cuts.length) {
+    point('Sin cortes.', 'No hay desconexiones del WiFi registradas por Windows en esta computadora.');
+    return;
+  }
+  if (P) {
+    point('No son cortes al azar.',
+      `${inCycle} de los ${cuts.length} cortes llegaron exactamente ${fmtPeriod(P)} después de otro, o un múltiplo justo, con una diferencia de segundos.`);
+    if (grid) {
+      const chance = Math.max(1, Math.round(grid.chance));
+      point('Hasta los demás siguen el mismo reloj.',
+        `${grid.n} de los ${grid.of} intervalos que no fueron de ${fmtPeriod(P)} son múltiplos exactos de ${fmtMinutes(grid.q)} ` +
+        `(por ejemplo, ${fmtHM(P - grid.q)} o ${fmtHM(P + grid.q)}), con segundos de diferencia. Si los cortes fueran al azar, ` +
+        `eso pasaría en ${chance === 1 ? 'uno' : `unos ${chance}`} de ${grid.of}.`);
+    }
+    if (multiples.length) {
+      const ks = [...new Set(multiples.map(c => c.k))].sort((a, b) => a - b).slice(0, 4).map(k => Math.round(k * P / HOUR));
+      const list = ks.length > 1 ? `${ks.slice(0, -1).join(', ')} o ${ks[ks.length - 1]} h` : `${ks[0]} h`;
+      point('No los provoca la computadora.',
+        `El ciclo no se reinicia cuando la computadora se apaga: después de horas apagada, el siguiente corte llega justo a horario (${list} después del anterior).`);
+    }
+    point('Hay un temporizador.',
+      `Un ciclo tan exacto indica que algo se reinicia solo cada ${fmtPeriod(P)}: el módem/router o la conexión con el proveedor.`);
+  } else {
+    point('Sin ciclo fijo.', 'Los cortes no siguen un intervalo regular.');
+  }
+  if (median != null) {
+    point('Cada corte es corto, pero corta todo.',
+      `Dura unos ${fmtDur(median)}, y en ese momento se cae todo lo que esté usando internet: videollamadas, juegos en línea, descargas.`);
+  }
+  if (next) {
+    point('Se puede anticipar.',
+      `Con este ciclo, el próximo corte debería ser ${fmtWhen(next)}` +
+      (dailyTimes ? `. Hoy los cortes caen alrededor de las ${dailyTimes.map(fmtTime).join(', ')}.` : '.'));
+  }
+}
+
+function renderDays() {
+  const t = document.getElementById('days');
+  if (!cuts.length) {
+    h('caption', 'No hay cortes registrados.', t, 'empty-state');
+    return;
+  }
+  document.getElementById('days-sub').textContent = P
+    ? 'Con fondo de color, los cortes que llegaron a horario' +
+      (grid ? `; con borde de color, los corridos un múltiplo exacto de ${fmtMinutes(grid.q)}` : '') +
+      '; con borde punteado, los que no siguen el ciclo. Los días que no aparecen, la computadora no estuvo encendida a la hora del corte.'
+    : 'Los días que no aparecen, la computadora no estuvo encendida o no hubo cortes.';
+  const head = h('tr', null, h('thead', null, t));
+  for (const c of ['Día', 'Cortes', 'Hora de cada corte']) h('th', c, head);
+  const body = h('tbody', null, t);
+  const byDay = new Map();
+  for (const c of cuts) {
+    const k = startOfDay(c.time).getTime();
+    if (!byDay.has(k)) byDay.set(k, []);
+    byDay.get(k).push(c);
+  }
+  for (const [k, list] of byDay) {
+    const tr = h('tr', null, body);
+    h('td', fmtDay(new Date(k)), tr, 'day');
+    h('td', String(list.length), tr, 'day');
+    const td = h('td', null, tr);
+    for (const c of list) {
+      const chip = h('span', fmtTime(c.time), td, 'chip' + (c.cls === 'cycle' || !P ? '' : ' ' + c.cls));
+      chip.title = STYLE[c.cls].tip;
+    }
+  }
+}
+
+render();
+</script>
+</body>
+</html>

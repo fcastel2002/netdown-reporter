@@ -74,13 +74,14 @@ sealed class TrayApp : ApplicationContext
         menu.Items.AddRange(new ToolStripItem[]
         {
             statusItem, nextCutItem, new ToolStripSeparator(), silenceItem,
-            new ToolStripMenuItem("Abrir reporte", null, (_, _) => OpenReport()),
+            new ToolStripMenuItem("Abrir reporte", null, (_, _) => OpenReport(Report.Full)),
+            new ToolStripMenuItem("Abrir informe para el reclamo", null, (_, _) => OpenReport(Report.Claim)),
             new ToolStripMenuItem("Abrir carpeta de datos", null, (_, _) => Shell(log.Dir)),
             reconnectItem, autostartItem, new ToolStripSeparator(),
             new ToolStripMenuItem("Salir", null, (_, _) => ExitThread()),
         });
         tray.ContextMenuStrip = menu;
-        tray.DoubleClick += (_, _) => OpenReport();
+        tray.DoubleClick += (_, _) => OpenReport(Report.Full);
         tray.BalloonTipClicked += (_, _) => StopAlarm();
         SetStatus(idleIcon, "Iniciando…");
         tray.Visible = true;
@@ -303,9 +304,9 @@ sealed class TrayApp : ApplicationContext
         tray.Text = "NetDown Reporter: " + text;
     }
 
-    void OpenReport()
+    void OpenReport(Report.Kind kind)
     {
-        try { Shell(Report.Write(log, tracker.Current, sessionStart, DateTime.Now, WlanEventLog.Read())); }
+        try { Shell(Report.Write(kind, log, tracker.Current, sessionStart, DateTime.Now, WlanEventLog.Read())); }
         catch (Exception e) { MessageBox.Show(e.Message, "No se pudo generar el reporte", MessageBoxButtons.OK, MessageBoxIcon.Error); }
     }
 

@@ -5,7 +5,11 @@ using System.Xml.Linq;
 namespace NetDownReporter;
 
 /// <summary>Una desconexión de WiFi que Windows registró (evento 8003 de WLAN-AutoConfig).</summary>
-public sealed record WlanDisconnect(DateTime Time, string Ssid, string Reason);
+/// <param name="Code">
+/// ReasonCode del evento: 0 es "el controlador desconectó la red" (se perdió el enlace); los demás los pidió
+/// la propia PC (el usuario al cambiar de red, una app). null si el evento no lo trae.
+/// </param>
+public sealed record WlanDisconnect(DateTime Time, string Ssid, string Reason, int? Code = null);
 
 /// <summary>
 /// Lee del log de Windows las desconexiones de WiFi, incluidas las de antes de instalar la app
@@ -52,6 +56,7 @@ public static class WlanEventLog
 
         var data = root.Element(Ns + "EventData")?.Elements(Ns + "Data") ?? [];
         string Field(string name) => data.FirstOrDefault(d => (string?)d.Attribute("Name") == name)?.Value.Trim() ?? "";
-        return new WlanDisconnect(DateTime.SpecifyKind(utc, DateTimeKind.Utc).ToLocalTime(), Field("SSID"), Field("Reason"));
+        int? code = int.TryParse(Field("ReasonCode"), NumberStyles.Integer, CultureInfo.InvariantCulture, out var c) ? c : null;
+        return new WlanDisconnect(DateTime.SpecifyKind(utc, DateTimeKind.Utc).ToLocalTime(), Field("SSID"), Field("Reason"), code);
     }
 }

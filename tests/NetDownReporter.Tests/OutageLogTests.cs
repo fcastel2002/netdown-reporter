@@ -59,13 +59,17 @@ public sealed class OutageLogTests : IDisposable
         Assert.Empty(log.ReadOutages());
     }
 
-    [Fact]
-    public void ReportEmbedsDataWithoutBreakingTheScriptTag()
+    [Theory]
+    [InlineData("reporte.html")]
+    [InlineData("reclamo.html")]
+    public void ReportEmbedsDataWithoutBreakingTheScriptTag(string fileName)
     {
         log.Append(new Outage(T0, T0.AddMinutes(1), Cause.Router, [Cause.Router], "", "SSID=</script><b>x"));
-        var path = Report.Write(log, new Outage(T0.AddHours(1), null, Cause.Isp, [Cause.Isp]), T0, T0.AddHours(2),
-            [new WlanDisconnect(T0.AddMinutes(30), "</script>Red", "El controlador desconectó la red.")]);
+        var kind = new[] { Report.Full, Report.Claim }.Single(k => k.FileName == fileName);
+        var path = Report.Write(kind, log, new Outage(T0.AddHours(1), null, Cause.Isp, [Cause.Isp]), T0, T0.AddHours(2),
+            [new WlanDisconnect(T0.AddMinutes(30), "</script>Red", "El controlador desconectó la red.", 0)]);
 
+        Assert.Equal(fileName, Path.GetFileName(path));
         var html = File.ReadAllText(path);
         Assert.DoesNotContain("/*__DATA__*/", html);
         Assert.DoesNotContain("</script><b>", html);
@@ -73,6 +77,7 @@ public sealed class OutageLogTests : IDisposable
         Assert.Contains("\"generated\":\"2026-10-15T23:00:00\"", html);
         Assert.Contains("\"ongoing\":true", html);
         Assert.Contains("\"disconnects\":[{\"time\":\"2026-10-15T21:30:00\"", html);
+        Assert.Contains("\"code\":0", html);
     }
 
     [Theory]
