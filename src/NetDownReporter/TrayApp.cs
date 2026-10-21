@@ -12,7 +12,9 @@ namespace NetDownReporter;
 /// </summary>
 sealed class TrayApp : ApplicationContext
 {
-    static readonly TimeSpan CheckInterval = TimeSpan.FromSeconds(5);
+    // Un ping por segundo con internet: no se nota en CPU ni en red, y un corte de router o ISP no
+    // genera ningún aviso de Windows, así que esto es lo que acota cuánto tarda en detectarse.
+    static readonly TimeSpan CheckInterval = TimeSpan.FromSeconds(1);
     static readonly TimeSpan PendingRecheck = TimeSpan.FromSeconds(1);
     // Sin WiFi el ping falla al instante (no hay ruta): chequear seguido no cuesta y acorta el corte.
     static readonly TimeSpan WifiRecheck = TimeSpan.FromMilliseconds(500);
@@ -123,7 +125,7 @@ sealed class TrayApp : ApplicationContext
                 if (started != epoch || suspended) return;
                 Handle(now, failure);
 
-                // Un fallo suelto de router/ISP se confirma o descarta enseguida, no en 5 s; sin WiFi se
+                // Un fallo suelto de router/ISP se confirma o descarta enseguida; sin WiFi se
                 // chequea seguido para notar al instante que volvió (y lanzar a tiempo cada reintento).
                 if (tracker.Pending) await Task.Delay(PendingRecheck);
                 else if (tracker.Current is not null && tracker.LastFailure == Cause.Wifi) await Task.Delay(WifiRecheck);

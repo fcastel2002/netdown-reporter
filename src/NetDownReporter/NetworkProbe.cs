@@ -16,11 +16,16 @@ public static class NetworkProbe
     /// <returns>null si hay internet; si no, la primera capa que falla.</returns>
     public static async Task<Cause?> CheckAsync()
     {
-        foreach (var host in InternetHosts)
-            if (await PingAsync(host)) return null;
+        if (await PingAsync(InternetHosts[0])) return null;
 
-        if (FindGateway() is not { } gateway) return Cause.Wifi;
-        return await PingAsync(gateway) ? Cause.Isp : Cause.Router;
+        // El segundo host y el gateway van en paralelo: en un corte de router cada ping espera el
+        // timeout entero, y en serie el chequeo tardaría 3 s en vez de 2.
+        var gateway = FindGateway();
+        var second = PingAsync(InternetHosts[1]);
+        var router = gateway is null ? Task.FromResult(false) : PingAsync(gateway);
+        if (await second) return null;
+        if (gateway is null) return Cause.Wifi;
+        return await router ? Cause.Isp : Cause.Router;
     }
 
     static async Task<bool> PingAsync(IPAddress address)
