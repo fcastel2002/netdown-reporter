@@ -7,23 +7,20 @@ public class WifiReconnectorTests
     static readonly Outage Open = new(T0, null, Cause.Wifi, [Cause.Wifi]);
 
     [Fact]
-    public void FirstAttemptIsImmediateThenBacksOff()
+    public void FirstAttemptIsImmediateThenRetriesEvery2s()
     {
         var r = new WifiReconnector();
         Assert.True(r.Update(At(5), Open, Cause.Wifi));
-        r.Completed(At(9), null);
+        r.Completed(At(5), null);
 
-        Assert.False(r.Update(At(10), Open, Cause.Wifi));
-        Assert.True(r.Update(At(20), Open, Cause.Wifi));    // +10 s
-        r.Completed(At(24), null);
-        Assert.False(r.Update(At(50), Open, Cause.Wifi));
-        Assert.True(r.Update(At(55), Open, Cause.Wifi));    // +30 s
-        r.Completed(At(59), null);
-        Assert.False(r.Update(At(115), Open, Cause.Wifi));
-        Assert.True(r.Update(At(120), Open, Cause.Wifi));   // +60 s
-        r.Completed(At(124), null);
-        Assert.True(r.Update(At(185), Open, Cause.Wifi));   // el último se repite
-        Assert.Equal(5, r.Attempts);
+        Assert.False(r.Update(At(6), Open, Cause.Wifi));
+        Assert.True(r.Update(At(7), Open, Cause.Wifi));     // +2 s
+        r.Completed(At(11), null);                           // escaneo de 4 s
+        Assert.False(r.Update(At(12), Open, Cause.Wifi));
+        Assert.True(r.Update(At(13), Open, Cause.Wifi));    // +2 s desde que terminó
+        r.Completed(At(15), null);
+        Assert.True(r.Update(At(300), Open, Cause.Wifi));   // sigue mientras dure el corte
+        Assert.Equal(4, r.Attempts);
     }
 
     [Fact]

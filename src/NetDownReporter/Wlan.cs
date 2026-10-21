@@ -36,8 +36,9 @@ static class Wlan
     }
 
     /// <summary>
-    /// Pide un escaneo en todas las interfaces (lo mismo que hace abrir el panel de WiFi) y espera a que
-    /// Windows avise que terminó, o como mucho <paramref name="timeout"/>. Un escaneo suele tardar 1–3 s.
+    /// Pide un escaneo en las interfaces desconectadas (lo mismo que hace abrir el panel de WiFi) y espera
+    /// a que Windows avise que terminó, o como mucho <paramref name="timeout"/>. Un escaneo suele tardar
+    /// 1–3 s. Una interfaz que ya está conectándose se deja tranquila, como en <see cref="Connect"/>.
     /// </summary>
     /// <returns>Descripción del error si alguna llamada falló; null si se aceptaron.</returns>
     public static async Task<string?> ScanAsync(TimeSpan timeout)
@@ -61,8 +62,9 @@ static class Wlan
                 // Si no se puede registrar, se espera el timeout completo como antes. Sin ignorar duplicados:
                 // si no, Windows descarta el aviso de fin de escaneo cuando es igual al del intento anterior.
                 WlanRegisterNotification(handle, NotificationSourceAcm, false, callback, 0, 0, out _);
-                var error = ForEachInterface(handle, (guid, _) =>
+                var error = ForEachInterface(handle, (guid, state) =>
                 {
+                    if (state != InterfaceStateDisconnected) return Busy(state);
                     var e = Check("WlanScan", WlanScan(handle, ref guid, 0, 0, 0));
                     if (e is null) Interlocked.Increment(ref pending);
                     return e;
@@ -89,7 +91,7 @@ static class Wlan
     /// </summary>
     public static string? Connect(string profile) => Use((handle, guid, state) =>
     {
-        if (state != InterfaceStateDisconnected) return null;
+        if (state != InterfaceStateDisconnected) return Busy(state);
         var p = new ConnectionParameters
         {
             Mode = ConnectionModeProfile,
@@ -100,6 +102,19 @@ static class Wlan
     });
 
     static string? Check(string call, uint result) => result == 0 ? null : $"{call} error {result}";
+
+    // Queda en la nota del corte si nunca se pudo pedir la conexión: muestra si Windows se trabó a mitad
+    // de conectarse (y no desconectado), que es lo que hay que saber para forzarlo en ese estado.
+    static string? Busy(int state) => state switch
+    {
+        InterfaceStateConnected => null,
+        0 => "WiFi no listo",
+        3 => "WiFi desconectándose",
+        5 => "WiFi asociándose",
+        6 => "WiFi buscando la red",
+        7 => "WiFi autenticándose",
+        _ => $"WiFi en estado {state}",
+    };
 
     /// <summary>Abre un handle, llama a <paramref name="action"/> por cada interfaz y lo cierra.</summary>
     /// <returns>El primer error; null si no hubo.</returns>

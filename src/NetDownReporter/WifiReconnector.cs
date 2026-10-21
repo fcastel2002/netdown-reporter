@@ -1,15 +1,16 @@
 namespace NetDownReporter;
 
 /// <summary>
-/// Decide cuándo intentar reconectar el WiFi durante un corte (lógica pura, sin E/S). Windows a veces
-/// no reconecta solo hasta que se abre el panel de WiFi, así que se repite lo que hace el panel: un
-/// escaneo y la conexión con el último perfil. El primer intento es al confirmarse el corte y los
-/// siguientes esperan <see cref="Backoff"/>; el último valor se repite mientras el corte siga siendo
-/// <see cref="Cause.Wifi"/>.
+/// Decide cuándo intentar reconectar el WiFi durante un corte (lógica pura, sin E/S). No se puede
+/// confiar en que Windows reconecte solo (a veces no lo hace hasta que se abre el panel de WiFi), así
+/// que se repite lo que hace el panel: un escaneo y la conexión con el último perfil. El primer intento
+/// es al confirmarse el corte y los siguientes, <see cref="RetryDelay"/> después de terminar el anterior,
+/// mientras el corte siga siendo <see cref="Cause.Wifi"/>. Repetir seguido no pisa una conexión en curso:
+/// <see cref="Wlan"/> sólo actúa sobre interfaces desconectadas.
 /// </summary>
 public sealed class WifiReconnector
 {
-    public static readonly TimeSpan[] Backoff = [TimeSpan.FromSeconds(10), TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(60)];
+    public static readonly TimeSpan RetryDelay = TimeSpan.FromSeconds(2);
 
     DateTime? next;
     bool busy, recovered;
@@ -42,7 +43,7 @@ public sealed class WifiReconnector
         if (!busy) return;
         busy = false;
         lastError = error ?? lastError;
-        next = at + Backoff[Math.Min(Attempts, Backoff.Length) - 1];
+        next = at + RetryDelay;
     }
 
     /// <summary>Nota para el corte; null si no hubo intentos.</summary>
